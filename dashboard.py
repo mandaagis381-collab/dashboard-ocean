@@ -33,7 +33,9 @@ with st.sidebar:
     st.caption("Platform Analisis Data Kelautan")
     st.markdown("<br>", unsafe_allow_html=True)
     
-    all_options = ["🏠 Dashboard", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose", "🌡️ Profil CTD"]
+    # ✅ CTD DIHAPUS DARI MENU
+    all_options = ["🏠 Dashboard", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose"]
+    
     st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
     pilihan = st.radio("Navigasi", all_options, label_visibility="collapsed")
     
@@ -111,7 +113,6 @@ if uploaded_file is not None:
             except:
                 st.error("Window terlalu kecil.")
 
-    # ✅ PASUT SUDAH DIPERBAIKI (INI DOANG YANG DIUBAH)
     elif pilihan == "🌊 Analisis Pasut":
         st.header("🌊 Modul: Analisis Pasang Surut")
 
@@ -142,39 +143,6 @@ if uploaded_file is not None:
 
             st.altair_chart(chart, use_container_width=True)
 
-            st.subheader("Konstanta Harmonik Utama")
-            df_coef = pd.DataFrame({
-                "Komponen": coef.name,
-                "Amplitudo": coef.A,
-                "Fase": coef.g
-            })
-
-            utama = ['M2', 'S2', 'K1', 'O1']
-            df_utama = df_coef[df_coef['Komponen'].isin(utama)].reset_index(drop=True)
-
-            c1, c2 = st.columns(2)
-            c1.table(df_utama)
-
-            try:
-                amps = dict(zip(df_utama['Komponen'], df_utama['Amplitudo']))
-                F = (amps['K1'] + amps['O1']) / (amps['M2'] + amps['S2'])
-
-                c2.metric("Bilangan Formzahl (F)", round(F, 3))
-
-                if F <= 0.25:
-                    tipe = "Harian Ganda (Semidiurnal)"
-                elif F <= 1.5:
-                    tipe = "Campuran Dominan Ganda"
-                elif F <= 3.0:
-                    tipe = "Campuran Dominan Tunggal"
-                else:
-                    tipe = "Harian Tunggal (Diurnal)"
-
-                c2.success(f"Tipe Pasut: {tipe}")
-
-            except:
-                c2.info("Data kurang panjang untuk hitung Formzahl")
-
         else:
             st.warning("⚠️ Pilih data Water Level / Elevasi dulu")
 
@@ -204,16 +172,6 @@ if uploaded_file is not None:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.error("Pilih variabel wind")
-
-    elif pilihan == "🌡️ Profil CTD":
-        st.header("🌡️ Modul: Profil Vertikal")
-        if any(x in target.lower() for x in ['temp', 'sal']) and 'pressure' in df.columns:
-            st.altair_chart(alt.Chart(df).mark_line(point=True).encode(
-                x=target,
-                y=alt.Y('pressure', sort='descending')
-            ).properties(height=600).interactive(), use_container_width=True)
-        else:
-            st.warning("Butuh data suhu/salinitas + pressure")
 
 else:
     st.info("👋 Halo! Upload file dulu ya")
