@@ -33,7 +33,6 @@ with st.sidebar:
     st.caption("Platform Analisis Data Kelautan")
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # ✅ CTD DIHAPUS DARI MENU
     all_options = ["🏠 Dashboard", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose"]
     
     st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
@@ -142,6 +141,42 @@ if uploaded_file is not None:
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
+
+            # --- TAMBAHAN PERHITUNGAN ---
+            st.subheader("Konstanta Harmonik Utama")
+
+            df_coef = pd.DataFrame({
+                "Komponen": coef.name,
+                "Amplitudo": coef.A,
+                "Fase": coef.g
+            })
+
+            utama = ['M2', 'S2', 'K1', 'O1']
+            df_utama = df_coef[df_coef['Komponen'].isin(utama)].reset_index(drop=True)
+
+            col1, col2 = st.columns(2)
+
+            col1.table(df_utama)
+
+            try:
+                amps = dict(zip(df_utama['Komponen'], df_utama['Amplitudo']))
+                F = (amps['K1'] + amps['O1']) / (amps['M2'] + amps['S2'])
+
+                col2.metric("Bilangan Formzahl (F)", round(F, 3))
+
+                if F <= 0.25:
+                    tipe = "Harian Ganda (Semidiurnal)"
+                elif F <= 1.5:
+                    tipe = "Campuran Dominan Ganda"
+                elif F <= 3.0:
+                    tipe = "Campuran Dominan Tunggal"
+                else:
+                    tipe = "Harian Tunggal (Diurnal)"
+
+                col2.success(f"Tipe Pasut: {tipe}")
+
+            except:
+                col2.info("Data kurang panjang untuk hitung Formzahl")
 
         else:
             st.warning("⚠️ Pilih data Water Level")
