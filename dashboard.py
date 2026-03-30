@@ -1,129 +1,181 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 import numpy as np
+import plotly.express as px
 from scipy.signal import butter, filtfilt
-import plotly.graph_objects as go
+import utide
 
-# Config
-st.set_page_config(page_title="Ocean Dashboard", layout="wide")
-st.title("Ocean Data Dashboard")
+# --- 1. CONFIG & UI STYLE ---
+st.set_page_config(page_title="OceanData Pro Analytics", layout="wide")
 
-file = st.file_uploader("Upload CSV", type=["csv"])
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    .stApp { background-color: #0b0e14; color: #e0e0e0; }
+    [data-testid="stSidebar"] { background-color: #11151c; border-right: 1px solid #1f2937; }
+    .menu-header { 
+        color: #58a6ff; font-weight: 800; margin-top: 35px; margin-bottom: 15px; 
+        font-size: 13px; letter-spacing: 2px; text-transform: uppercase; 
+        padding-left: 10px; border-left: 3px solid #00d4ff; 
+    }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] { height: 45px; border-radius: 4px 4px 0 0; background-color: #161b22; color: #888; }
+    .stTabs [aria-selected="true"] { background-color: #007bff !important; color: white !important; }
+    h1, h2, h3 { color: #00d4ff; }
+</style>
+""", unsafe_allow_html=True)
 
-if file:
-    df = pd.read_csv(file)
+# --- 2. SIDEBAR ---
+with st.sidebar:
+    st.markdown("<h2 style='color:#00d4ff; margin-bottom:0;'>🌊 OceanData</h2>", unsafe_allow_html=True)
+    st.caption("Platform Analisis Data Kelautan")
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    all_options = ["🏠 Dashboard", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose", "🌡️ Profil CTD"]
+    st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
+    pilihan = st.radio("Navigasi", all_options, label_visibility="collapsed")
+    
+    st.markdown("---")
+    uploaded_file = st.file_uploader("Upload File CSV/Excel", type=["csv", "xlsx"])
 
-    # Merapikan Kolom
-    df.columns = df.columns.str.lower().str.strip()
+# --- 3. LOGIKA DATA UTAMA ---
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file, sep=None, engine='python')
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    cols_num = df.select_dtypes(include=[np.number]).columns.tolist()
+    target = st.sidebar.selectbox("Pilih Variabel Analisis:", cols_num)
 
-    # Mendeteksi Kolom
-    time_col = [col for col in df.columns if "time" in col][0]
-    df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
-    df = df.dropna(subset=[time_col])
-    df = df.sort_values(time_col)
+    df_clean = df[['timestamp', target]].copy()
+    df_clean[target] = df_clean[target].interpolate(method='linear', limit_direction='both')
+    df_clean = df_clean.dropna()
+    df_clean.columns = ['time', 'raw']
 
-    # Kolom Numerik
-    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
-    param = st.selectbox("Pilih Parameter", numeric_cols)
+    # --- 4. ROUTING HALAMAN ---
+    if pilihan == "🏠 Dashboard":
+        st.header(f"🏠 Dashboard: {target}")
+        st.dataframe(df_clean.head(100), use_container_width=True)
 
-    df[param] = pd.to_numeric(df[param], errors='coerce')
+    elif pilihan == "📂 Data Cleaning":
+        st.header("📂 Preprocessing: Despiking")
+        thresh = st.slider("Threshold (Std Dev):", 1.0, 5.0, 3.0)
+        mean, std = df_clean['raw'].mean(), df_clean['raw'].std()
+        df_cleaned = df_clean[((df_clean['raw'] - mean).abs() / std) <= thresh].copy()
+        st.line_chart(df_cleaned.set_index('time')['raw'])
 
-    # Memotong Outlier
-    q1 = df[param].quantile(0.01)
-    q99 = df[param].quantile(0.99)
-    df[param] = df[param].clip(q1, q99)
+    elif pilihan == "📈 Visualisasi":
+        st.header("📈 Analisis Deret Waktu (Time Series)")
+        st.sidebar.markdown("### Setting Filter")
+        pilihan_jam = st.sidebar.selectbox("Pilih Jendela Waktu:", ["1 Jam", "3 Jam", "12 Jam", "24 Jam", "25 Jam (Eliminasi Pasut)", "Custom"])
+        
+        if pilihan_jam == "1 Jam": window_size = 60
+        elif pilihan_jam == "3 Jam": window_size = 180
+        elif pilihan_jam == "12 Jam": window_size = 720
+        elif pilihan_jam == "24 Jam": window_size = 1440
+        elif pilihan_jam == "25 Jam (Eliminasi Pasut)": window_size = 1500
+        else: window_size = st.sidebar.number_input("Masukkan Jumlah Poin:", 5, 5000, 60)
 
-    # Memilih Data
-    st.subheader("Pilih Data yang Ditampilkan")
+        t_raw, t_avg, t_ma, t_lp = st.tabs(["📄 Data Raw", "📊 Averaging", "📈 Moving Average", "📉 Low Pass"])
+        
+        with t_raw:
+            st.altair_chart(alt.Chart(df_clean).mark_line(color='#00d4ff').encode(x='time:T', y=alt.Y('raw:Q', scale=alt.Scale(zero=False))).properties(height=450).interactive(), use_container_width=True)
+        
+        with t_avg:
+            df_avg = df_clean.copy(); df_avg['filtered'] = df_avg['raw'].rolling(window=window_size).mean()
+            st.altair_chart(alt.Chart(df_avg.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
 
-    show_raw = st.checkbox("Raw Data", True)
-    show_avg = st.checkbox("Average (per jam)")
-    show_moving = st.checkbox("Moving Average")
-    show_filter = st.checkbox("Signal Filter")
+        with t_ma:
+            df_ma = df_clean.copy(); df_ma['filtered'] = df_ma['raw'].rolling(window=window_size, center=True).mean()
+            st.altair_chart(alt.Chart(df_ma.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
 
-    # Parameter
-    if show_avg:
-        jam_avg = st.slider("Average (jam)", 1, 25, 3)
-        df_resample = (
-            df.set_index(time_col)[[param]]
-            .resample(f'{jam_avg}h')
-            .mean()
-            .reset_index()
-        )
-
-    if show_moving:
-        window = st.slider("Window Moving Average", 1, 50, 5)
-        df['moving_avg'] = df[param].rolling(window=window, min_periods=1).mean()
-
-    if show_filter:
-        filter_type = st.selectbox("Tipe Filter", ["lowpass", "highpass", "bandpass"])
-        order = st.slider("Filter Order", 1, 5, 2)
-
-        if filter_type in ["lowpass", "highpass"]:
-            cutoff = st.slider("Cutoff (0.01 - 0.5)", 0.01, 0.5, 0.05)
-
-        if filter_type == "bandpass":
-            low = st.slider("Low Cut", 0.01, 0.5, 0.05)
-            high = st.slider("High Cut", 0.05, 0.9, 0.2)
-
-        def apply_filter(data):
-            data = data.fillna(method='bfill').fillna(method='ffill')
-            if len(data) < 10:
-                return data
+        with t_lp:
             try:
-                if filter_type == "lowpass":
-                    b, a = butter(order, cutoff, btype='low')
-                elif filter_type == "highpass":
-                    b, a = butter(order, cutoff, btype='high')
-                elif filter_type == "bandpass":
-                    b, a = butter(order, [low, high], btype='band')
+                b, a = butter(4, 1/window_size, btype='low')
+                df_lp = df_clean.copy(); df_lp['filtered'] = filtfilt(b, a, df_lp['raw'])
+                st.altair_chart(alt.Chart(df_lp.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
+            except: st.error("Window terlalu kecil.")
 
-                return filtfilt(b, a, data)
-            except:
-                return data
+    elif pilihan == "🌊 Analisis Pasut":
+        st.header("🌊 Modul: Analisis Pasang Surut")
+        if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
+            time_hours = (df_clean['time'] - df_clean['time'].min()).dt.total_seconds() / 3600
+            with st.spinner('Menghitung Harmonik...'):
+                coef = utide.solve(time_hours.values, df_clean['raw'].values, lat=-6.0, method='ols', conf_int='linear')
+                predict = utide.reconstruct(time_hours.values, coef)
+            
+            df_pasut = df_clean.copy(); df_pasut['Prediksi'] = predict.h
+            st.subheader("Grafik Observasi vs Prediksi")
+            chart = alt.Chart(df_pasut.melt('time', ['raw', 'Prediksi'])).mark_line().encode(
+                x='time:T', y=alt.Y('value:Q', scale=alt.Scale(zero=False)),
+                color=alt.Color('variable:N', scale=alt.Scale(range=['#00d4ff', '#ff4b4b']))
+            ).properties(height=400).interactive()
+            st.altair_chart(chart, use_container_width=True)
+            
+            st.subheader("Konstanta Harmonik Utama")
+            df_coef = pd.DataFrame({"Komponen": coef.name, "Amplitudo": coef.A, "Fase": coef.g})
+            utama = ['M2', 'S2', 'K1', 'O1']
+            df_utama = df_coef[df_coef['Komponen'].isin(utama)].reset_index(drop=True)
+            
+            c1, c2 = st.columns(2)
+            c1.table(df_utama)
+            try:
+                amps = dict(zip(df_utama['Komponen'], df_utama['Amplitudo']))
+                F = (amps['K1'] + amps['O1']) / (amps['M2'] + amps['S2'])
+                c2.metric("Bilangan Formzahl (F)", round(F, 3))
+                if F <= 0.25: t = "Harian Ganda"
+                elif F <= 1.5: t = "Campuran Dominan Ganda"
+                elif F <= 3.0: t = "Campuran Dominan Tunggal"
+                else: t = "Harian Tunggal"
+                c2.success(f"Tipe: {t}")
+            except: c2.info("Data kurang panjang untuk hitung F.")
+        else: st.warning("Pilih data Water Level!")
 
-        df['filtered'] = apply_filter(df[param])
+    elif pilihan == "🍃 Windrose":
+        st.header(f"🍃 Modul: Windrose ({target})")
+        
+        # Logika Universal untuk semua variabel Wind yang ada di gambar Dea
+        if "wind" in target.lower():
+            # 1. Tentukan kolom arah. Jika user pilih speed, pasangkan dengan avg direction.
+            # Jika user pilih direction, plot frekuensi arah itu sendiri.
+            if "speed" in target.lower():
+                direction_col = 'wind_direction_avg'
+                df_rose = df[[target, direction_col]].copy()
+                df_rose['dir_bin'] = (np.round(df_rose[direction_col] / 22.5) * 22.5) % 360
+                
+                # Buat klasifikasi warna otomatis untuk speed (avg, max, atau min)
+                min_v, max_v = df_rose[target].min(), df_rose[target].max()
+                bins = np.linspace(min_v, max_v, 6)
+                labels = [f"{round(bins[i],1)}-{round(bins[i+1],1)}" for i in range(5)]
+                df_rose['range'] = pd.cut(df_rose[target], bins=bins, labels=labels, include_lowest=True)
+                
+                counts = df_rose.groupby(['dir_bin', 'range']).size().reset_index(name='count')
+                fig = px.bar_polar(counts, r="count", theta="dir_bin", color="range", 
+                                   template="plotly_dark", title=f"Windrose Kecepatan: {target}")
+            
+            else: # Jika user pilih variabel 'direction' (avg, max, atau min)
+                df_rose = df[[target]].copy()
+                df_rose['dir_bin'] = (np.round(df_rose[target] / 22.5) * 22.5) % 360
+                counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
+                fig = px.bar_polar(counts, r="count", theta="dir_bin", 
+                                   template="plotly_dark", title=f"Distribusi Frekuensi Arah: {target}")
 
+            fig.update_layout(polar=dict(angularaxis=dict(rotation=90, direction='clockwise')))
+            st.plotly_chart(fig, use_container_width=True)
+            st.info(f"💡 Menampilkan data Windrose berdasarkan variabel: **{target}**")
+        else:
+            st.error("⚠️ Silakan pilih variabel yang berkaitan dengan 'Wind' di sidebar.")
+
+    elif pilihan == "🌡️ Profil CTD":
+        st.header("🌡️ Modul: Profil Vertikal")
+        if any(x in target.lower() for x in ['temp', 'sal']) and 'pressure' in df.columns:
+            st.altair_chart(alt.Chart(df).mark_line(point=True).encode(x=target, y=alt.Y('pressure', sort='descending')).properties(height=600).interactive(), use_container_width=True)
+        else: st.warning("Butuh data Suhu/Salinitas & Pressure.")
+else:
+    st.info("👋 Halo Dea! Silakan upload file CSV kamu.")
+            
+
+    
    
-    # Statistik Data
-    st.subheader("Statistik Data")
-
-    col1, col2, col3, col4, col5 = st.columns(5)
-
-    col1.metric("Max", round(df[param].max(), 2))
-    col2.metric("Min", round(df[param].min(), 2))
-    col3.metric("Mean", round(df[param].mean(), 2))
-    col4.metric("Std Dev", round(df[param].std(), 2))
-    col5.metric("Count", int(df[param].count()))
-
-    # Plot Grafik
-    fig = go.Figure()
-
-    if show_raw:
-        fig.add_trace(go.Scatter(
-            x=df[time_col], y=df[param],
-            name='Raw Data'
-        ))
-
-    if show_moving:
-        fig.add_trace(go.Scatter(
-            x=df[time_col], y=df['moving_avg'],
-            name='Moving Avg'
-        ))
-
-    if show_filter:
-        fig.add_trace(go.Scatter(
-            x=df[time_col], y=df['filtered'],
-            name=f'{filter_type.capitalize()} Filter'
-        ))
-
-    if show_avg:
-        fig.add_trace(go.Scatter(
-            x=df_resample[time_col], y=df_resample[param],
-            name=f'Average {jam_avg} Jam',
-            line=dict(dash='dash')
-        ))
-
-    fig.update_layout(template="plotly_dark")
-
-    st.plotly_chart(fig, use_container_width=True)
