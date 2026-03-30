@@ -144,7 +144,7 @@ if uploaded_file is not None:
             st.altair_chart(chart, use_container_width=True)
 
         else:
-            st.warning("⚠️ Pilih data Water Level / Elevasi dulu")
+            st.warning("⚠️ Pilih data Water Level")
 
     elif pilihan == "🍃 Windrose":
         st.header(f"🍃 Modul: Windrose ({target})")
@@ -174,4 +174,4 @@ if uploaded_file is not None:
             st.error("Pilih variabel wind")
 
 else:
-    st.info("👋 Halo! Upload file dulu ya")
+    st.info("👋 Halo! Silahkan Upload File")
