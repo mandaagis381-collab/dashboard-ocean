@@ -230,4 +230,4 @@ if uploaded_file is not None:
             st.error("Pilih variabel wind")
 
 else:
-    st.info("👋 Halo! Silahkan Upload File") terus tambahin yang bagian statistia nya disini , jgn diubah ubah yg lainnya 
+    st.info("👋 Halo! Silahkan Upload File") a
