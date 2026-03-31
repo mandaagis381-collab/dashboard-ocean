@@ -86,31 +86,6 @@ if uploaded_file is not None:
                 x='time:T',
                 y=alt.Y('raw:Q', scale=alt.Scale(zero=False))
             ).properties(height=450).interactive(), use_container_width=True)
-        
-        with t_avg:
-            df_avg = df_clean.copy()
-            df_avg['filtered'] = df_avg['raw'].rolling(window=window_size).mean()
-            st.altair_chart(alt.Chart(df_avg.melt('time', ['raw', 'filtered'])).mark_line().encode(
-                x='time:T', y='value:Q', color='variable:N'
-            ).properties(height=450).interactive(), use_container_width=True)
-
-        with t_ma:
-            df_ma = df_clean.copy()
-            df_ma['filtered'] = df_ma['raw'].rolling(window=window_size, center=True).mean()
-            st.altair_chart(alt.Chart(df_ma.melt('time', ['raw', 'filtered'])).mark_line().encode(
-                x='time:T', y='value:Q', color='variable:N'
-            ).properties(height=450).interactive(), use_container_width=True)
-
-        with t_lp:
-            try:
-                b, a = butter(4, 1/window_size, btype='low')
-                df_lp = df_clean.copy()
-                df_lp['filtered'] = filtfilt(b, a, df_lp['raw'])
-                st.altair_chart(alt.Chart(df_lp.melt('time', ['raw', 'filtered'])).mark_line().encode(
-                    x='time:T', y='value:Q', color='variable:N'
-                ).properties(height=450).interactive(), use_container_width=True)
-            except:
-                st.error("Window terlalu kecil.")
 
     elif pilihan == "🌊 Analisis Pasut":
         st.header("🌊 Analisis Pasang Surut")
@@ -127,7 +102,14 @@ if uploaded_file is not None:
             time = df_clean['time'].values
 
             with st.spinner('Menghitung Harmonik...'):
-                coef = utide.solve(time, data.values, lat=-6.0, method='ols', trend=False)
+                coef = utide.solve(
+                    time,
+                    data.values,
+                    lat=-6.0,
+                    method='ols',
+                    trend=False
+                )
+
                 predict = utide.reconstruct(time, coef)
 
             df_pasut = pd.DataFrame({
@@ -137,56 +119,20 @@ if uploaded_file is not None:
             })
 
             st.subheader("Grafik Observasi vs Prediksi")
+
             chart = alt.Chart(df_pasut.melt('time')).mark_line().encode(
                 x='time:T',
-                y=alt.Y('value:Q', scale=alt.Scale(domain=[-2, 2]), title='Elevasi Muka Air Laut (m)'),
-                color=alt.Color('variable:N',
+                y=alt.Y('value:Q', scale=alt.Scale(zero=False)),
+                color=alt.Color(
+                    'variable:N',
                     scale=alt.Scale(
                         domain=['observasi', 'prediksi'],
-                        range=['#1f77b4', '#ff0000']  # biru & merah
-                    ),
-                    legend=alt.Legend(title="Keterangan")
+                        range=['#00d4ff', 'red']  # 🔥 prediksi merah
+                    )
                 )
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
-
-            st.subheader("Konstanta Harmonik Utama")
-
-            df_coef = pd.DataFrame({
-                "Komponen": coef.name,
-                "Amplitudo": coef.A,
-                "Fase": coef.g
-            })
-
-            utama = ['M2', 'S2', 'K1', 'O1']
-            df_utama = df_coef[df_coef['Komponen'].isin(utama)].reset_index(drop=True)
-
-            col1, col2 = st.columns(2)
-            col1.table(df_utama)
-
-            try:
-                amps = dict(zip(df_utama['Komponen'], df_utama['Amplitudo']))
-                F = (amps['K1'] + amps['O1']) / (amps['M2'] + amps['S2'])
-
-                col2.metric("Bilangan Formzahl (F)", round(F, 3))
-
-                if F <= 0.25:
-                    tipe = "Harian Ganda (Semidiurnal)"
-                elif F <= 1.5:
-                    tipe = "Campuran Dominan Ganda"
-                elif F <= 3.0:
-                    tipe = "Campuran Dominan Tunggal"
-                else:
-                    tipe = "Harian Tunggal (Diurnal)"
-
-                col2.success(f"Tipe Pasut: {tipe}")
-
-            except:
-                col2.info("Data kurang panjang untuk hitung Formzahl")
-
-        else:
-            st.warning("⚠️ Pilih data Water Level")
 
     elif pilihan == "🍃 Windrose":
         st.header(f"🍃 Windrose ({target})")
@@ -210,15 +156,20 @@ if uploaded_file is not None:
                 counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
                 fig = px.bar_polar(counts, r="count", theta="dir_bin", template="plotly_dark")
 
+            # 🔥 FIX ARAH ANGIN (TEBAL + HITAM + MUNCUL)
             fig.update_layout(
                 polar=dict(
                     angularaxis=dict(
                         tickmode='array',
                         tickvals=[0,45,90,135,180,225,270,315],
                         ticktext=['N','NE','E','SE','S','SW','W','NW'],
+                        tickfont=dict(
+                            size=14,
+                            color="black",
+                            family="Arial Black"
+                        ),
                         rotation=90,
-                        direction='clockwise',
-                        tickfont=dict(size=14, color='white', family='Arial Black')
+                        direction='clockwise'
                     )
                 )
             )
