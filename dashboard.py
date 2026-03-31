@@ -111,11 +111,10 @@ if uploaded_file is not None:
             except:
                 st.error("Window terlalu kecil.")
 
-    # --- SCATTER (REVISI SESUAI PERINTAH) ---
+    # --- SCATTER (REVISI PETUNJUK & VALIDASI) ---
     elif pilihan == "🔍 Analisis Scatter":
         st.header("🔍 Analisis Scatter Plot")
         
-        # Petunjuk revisi
         st.info("💡 Petunjuk: Pilih variabel X dan variabel Y yang berbeda. **Tidak boleh memilih variabel yang sama.**")
 
         col_x = st.selectbox("Pilih Variabel X", cols_num)
@@ -135,7 +134,7 @@ if uploaded_file is not None:
 
                 st.altair_chart(chart, use_container_width=True)
 
-    # --- PASUT (TIDAK DIUBAH) ---
+    # --- PASUT ---
     elif pilihan == "🌊 Analisis Pasut":
         st.header("🌊 Modul: Analisis Pasang Surut")
 
@@ -205,7 +204,7 @@ if uploaded_file is not None:
         else:
             st.warning("⚠️ Pilih data Water Level / Elevasi dulu")
 
-    # --- WINDROSE (TIDAK DIUBAH) ---
+    # --- WINDROSE ---
     elif pilihan == "🍃 Windrose":
         if "wind" in target.lower():
             df_rose = df[[target]].copy()
