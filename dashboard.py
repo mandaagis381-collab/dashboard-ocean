@@ -55,9 +55,6 @@ if uploaded_file is not None:
     df_clean = df_clean.dropna()
     df_clean.columns = ['time', 'raw']
 
-    # --- CUT WATER LEVEL 300-400 ---
-    df_clean = df_clean[(df_clean['raw'] >= 300) & (df_clean['raw'] <= 400)]
-
     # --- 4. ROUTING HALAMAN ---
     if pilihan == "🏠 Dashboard":
         st.header(f"🏠 Dashboard: {target}")
@@ -71,7 +68,7 @@ if uploaded_file is not None:
         st.line_chart(df_cleaned.set_index('time')['raw'])
 
     elif pilihan == "📈 Visualisasi":
-        st.header("📈 Analisis Deret Waktu")
+        st.header("📈 Analisis Deret Waktu (Time Series)")
         st.sidebar.markdown("### Setting Filter")
         pilihan_jam = st.sidebar.selectbox("Pilih Jendela Waktu:", ["1 Jam", "3 Jam", "12 Jam", "24 Jam", "25 Jam (Eliminasi Pasut)", "Custom"])
         
@@ -115,8 +112,31 @@ if uploaded_file is not None:
             except:
                 st.error("Window terlalu kecil.")
 
+    elif pilihan == "🔍 Analisis Scatter":
+        st.header("🔍 Analisis Scatter")
+
+        cols = df.select_dtypes(include=[np.number]).columns.tolist()
+
+        col1, col2 = st.columns(2)
+        x_var = col1.selectbox("Pilih Variabel X:", cols, index=0)
+        y_var = col2.selectbox("Pilih Variabel Y:", cols, index=1 if len(cols) > 1 else 0)
+
+        df_scatter = df[[x_var, y_var]].dropna()
+
+        fig = px.scatter(
+            df_scatter,
+            x=x_var,
+            y=y_var,
+            template="plotly_dark"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        corr = df_scatter[x_var].corr(df_scatter[y_var])
+        st.metric("Koefisien Korelasi", round(corr, 3))
+
     elif pilihan == "🌊 Analisis Pasut":
-        st.header("🌊 Analisis Pasang Surut")
+        st.header("🌊 Modul: Analisis Pasang Surut")
 
         if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
 
@@ -145,11 +165,46 @@ if uploaded_file is not None:
 
             st.altair_chart(chart, use_container_width=True)
 
+            st.subheader("Konstanta Harmonik Utama")
+
+            df_coef = pd.DataFrame({
+                "Komponen": coef.name,
+                "Amplitudo": coef.A,
+                "Fase": coef.g
+            })
+
+            utama = ['M2', 'S2', 'K1', 'O1']
+            df_utama = df_coef[df_coef['Komponen'].isin(utama)].reset_index(drop=True)
+
+            col1, col2 = st.columns(2)
+
+            col1.table(df_utama)
+
+            try:
+                amps = dict(zip(df_utama['Komponen'], df_utama['Amplitudo']))
+                F = (amps['K1'] + amps['O1']) / (amps['M2'] + amps['S2'])
+
+                col2.metric("Bilangan Formzahl (F)", round(F, 3))
+
+                if F <= 0.25:
+                    tipe = "Harian Ganda (Semidiurnal)"
+                elif F <= 1.5:
+                    tipe = "Campuran Dominan Ganda"
+                elif F <= 3.0:
+                    tipe = "Campuran Dominan Tunggal"
+                else:
+                    tipe = "Harian Tunggal (Diurnal)"
+
+                col2.success(f"Tipe Pasut: {tipe}")
+
+            except:
+                col2.info("Data kurang panjang untuk hitung Formzahl")
+
         else:
             st.warning("⚠️ Pilih data Water Level")
 
     elif pilihan == "🍃 Windrose":
-        st.header(f"🍃 Windrose ({target})")
+        st.header(f"🍃 Modul: Windrose ({target})")
 
         if "wind" in target.lower():
             if "speed" in target.lower():
