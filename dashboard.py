@@ -33,7 +33,6 @@ with st.sidebar:
     st.caption("Platform Analisis Data Kelautan")
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # ❌ CTD DIHAPUS DI SINI
     all_options = ["🏠 Dashboard", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose"]
     
     st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
@@ -130,41 +129,48 @@ if uploaded_file is not None:
 
             st.altair_chart(chart, use_container_width=True)
 
-    # --- PASUT (DITAMBAH FORMZAHL) ---
+    # --- PASUT FINAL ---
     elif pilihan == "🌊 Analisis Pasut":
-        st.header("🌊 Analisis Pasang Surut")
+        st.header("🌊 Modul: Analisis Pasang Surut")
 
         if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
-            data = df_clean['raw'] - df_clean['raw'].mean()
+
             time = df_clean['time'].values
 
-            coef = utide.solve(time, data.values, lat=-6.0)
-            pred = utide.reconstruct(time, coef)
+            # NORMALISASI 0–1
+            data = df_clean['raw']
+            data = (data - data.min()) / (data.max() - data.min())
+
+            with st.spinner('Menghitung Harmonik...'):
+                coef = utide.solve(time, data.values, lat=-6.0, method='ols', trend=False)
+                predict = utide.reconstruct(time, coef)
 
             df_pasut = pd.DataFrame({
                 'time': time,
                 'Observasi': data,
-                'Prediksi': pred.h
+                'Prediksi': predict.h
             })
 
+            st.subheader("Grafik Observasi vs Prediksi")
             chart = alt.Chart(df_pasut.melt('time')).mark_line().encode(
                 x='time:T',
-                y='value:Q',
+                y=alt.Y('value:Q', scale=alt.Scale(zero=False)),
                 color=alt.Color('variable:N',
-                    scale=alt.Scale(domain=['Observasi','Prediksi'],
-                                    range=['#00008B','#FF0000']))
+                                scale=alt.Scale(domain=['Observasi','Prediksi'],
+                                                range=['#00d4ff','#ff4b4b']))
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
 
-            # konstanta utama
+            st.subheader("Konstanta Harmonik Utama")
+
             df_coef = pd.DataFrame({
                 "Komponen": coef.name,
                 "Amplitudo": coef.A,
                 "Fase": coef.g
             })
 
-            utama = ['M2','S2','K1','O1']
+            utama = ['M2', 'S2', 'K1', 'O1']
             df_utama = df_coef[df_coef['Komponen'].isin(utama)].reset_index(drop=True)
 
             c1, c2 = st.columns(2)
@@ -174,7 +180,7 @@ if uploaded_file is not None:
                 amps = dict(zip(df_utama['Komponen'], df_utama['Amplitudo']))
                 F = (amps['K1'] + amps['O1']) / (amps['M2'] + amps['S2'])
 
-                c2.metric("Bilangan Formzahl (F)", round(F,3))
+                c2.metric("Bilangan Formzahl (F)", round(F, 3))
 
                 if F <= 0.25:
                     tipe = "Harian Ganda (Semidiurnal)"
@@ -191,9 +197,9 @@ if uploaded_file is not None:
                 c2.info("Data kurang panjang untuk hitung Formzahl")
 
         else:
-            st.warning("Pilih data elevasi!")
+            st.warning("⚠️ Pilih data Water Level / Elevasi dulu")
 
-    # --- WINDROSE (TIDAK DIUBAH) ---
+    # --- WINDROSE ---
     elif pilihan == "🍃 Windrose":
         if "wind" in target.lower():
             df_rose = df[[target]].copy()
