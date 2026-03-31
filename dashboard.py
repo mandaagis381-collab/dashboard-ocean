@@ -230,4 +230,4 @@ if uploaded_file is not None:
             st.error("Pilih variabel wind")
 
 else:
-    st.info("👋 Halo! Silahkan Upload File") a
+    st.info("👋 Halo! Silahkan Upload File")
