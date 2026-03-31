@@ -111,7 +111,7 @@ if uploaded_file is not None:
             except:
                 st.error("Window terlalu kecil.")
 
-    # --- SCATTER (REVISI PETUNJUK & VALIDASI) ---
+    # --- SCATTER 
     elif pilihan == "🔍 Analisis Scatter":
         st.header("🔍 Analisis Scatter Plot")
         
@@ -136,7 +136,7 @@ if uploaded_file is not None:
 
     # --- PASUT ---
     elif pilihan == "🌊 Analisis Pasut":
-        st.header("🌊 Modul: Analisis Pasang Surut")
+        st.header("🌊 Analisis Pasang Surut")
 
         if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
 
@@ -204,27 +204,29 @@ if uploaded_file is not None:
         else:
             st.warning("⚠️ Pilih data Water Level / Elevasi dulu")
 
-    # --- WINDROSE ---
-    elif pilihan == "🍃 Windrose":
+     elif pilihan == "🍃 Windrose":
+        st.header(f"🍃 Modul: Windrose ({target})")
+
         if "wind" in target.lower():
-            df_rose = df[[target]].copy()
-            df_rose['dir_bin'] = (np.round(df_rose[target]/22.5)*22.5)%360
-            counts = df_rose.groupby('dir_bin').size().reset_index(name='count')
+            if "speed" in target.lower():
+                direction_col = 'wind_direction_avg'
+                df_rose = df[[target, direction_col]].copy()
+                df_rose['dir_bin'] = (np.round(df_rose[direction_col] / 22.5) * 22.5) % 360
+                
+                min_v, max_v = df_rose[target].min(), df_rose[target].max()
+                bins = np.linspace(min_v, max_v, 6)
+                labels = [f"{round(bins[i],1)}-{round(bins[i+1],1)}" for i in range(5)]
+                df_rose['range'] = pd.cut(df_rose[target], bins=bins, labels=labels, include_lowest=True)
+                
+                counts = df_rose.groupby(['dir_bin', 'range']).size().reset_index(name='count')
+                fig = px.bar_polar(counts, r="count", theta="dir_bin", color="range", template="plotly_dark")
+            else:
+                df_rose = df[[target]].copy()
+                df_rose['dir_bin'] = (np.round(df_rose[target] / 22.5) * 22.5) % 360
+                counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
+                fig = px.bar_polar(counts, r="count", theta="dir_bin", template="plotly_dark")
 
-            fig = px.bar_polar(counts, r="count", theta="dir_bin", template="plotly_dark")
-
-            fig.update_layout(
-                polar=dict(
-                    angularaxis=dict(
-                        tickvals=[0,45,90,135,180,225,270,315],
-                        ticktext=['N','NE','E','SE','S','SW','W','NW'],
-                        tickfont=dict(size=14, color='black', family='Arial Black'),
-                        rotation=90,
-                        direction='clockwise'
-                    )
-                )
-            )
-
+            fig.update_layout(polar=dict(angularaxis=dict(rotation=90, direction='clockwise')))
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.error("Pilih variabel wind")
