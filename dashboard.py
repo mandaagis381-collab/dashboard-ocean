@@ -33,7 +33,7 @@ with st.sidebar:
     st.caption("Platform Analisis Data Kelautan")
     st.markdown("<br>", unsafe_allow_html=True)
     
-    all_options = ["🏠 Dashboard", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose"]
+    all_options = ["🏠 Dashboard", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose", "🌡️ Profil CTD"]
     
     st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
     pilihan = st.radio("Navigasi", all_options, label_visibility="collapsed")
@@ -41,7 +41,7 @@ with st.sidebar:
     st.markdown("---")
     uploaded_file = st.file_uploader("Upload File CSV/Excel", type=["csv", "xlsx"])
 
-# --- 3. LOGIKA DATA UTAMA ---
+# --- 3. DATA ---
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file, sep=None, engine='python')
     if 'timestamp' in df.columns:
@@ -55,11 +55,12 @@ if uploaded_file is not None:
     df_clean = df_clean.dropna()
     df_clean.columns = ['time', 'raw']
 
-    # --- 4. ROUTING HALAMAN ---
+    # --- DASHBOARD ---
     if pilihan == "🏠 Dashboard":
         st.header(f"🏠 Dashboard: {target}")
         st.dataframe(df_clean.head(100), use_container_width=True)
 
+    # --- CLEANING ---
     elif pilihan == "📂 Data Cleaning":
         st.header("📂 Preprocessing: Despiking")
         thresh = st.slider("Threshold (Std Dev):", 1.0, 5.0, 3.0)
@@ -67,9 +68,9 @@ if uploaded_file is not None:
         df_cleaned = df_clean[((df_clean['raw'] - mean).abs() / std) <= thresh].copy()
         st.line_chart(df_cleaned.set_index('time')['raw'])
 
-    # =========================
-    # 🔥 VISUALISASI (TIDAK DIUBAH SESUAI PUNYAMU)
-    # =========================
+    # ==================================================
+    # 📈 VISUALISASI (PERSIS PUNYA KAMU)
+    # ==================================================
     elif pilihan == "📈 Visualisasi":
         st.header("📈 Analisis Deret Waktu (Time Series)")
         st.sidebar.markdown("### Setting Filter")
@@ -91,15 +92,13 @@ if uploaded_file is not None:
             ).properties(height=450).interactive(), use_container_width=True)
         
         with t_avg:
-            df_avg = df_clean.copy()
-            df_avg['filtered'] = df_avg['raw'].rolling(window=window_size).mean()
+            df_avg = df_clean.copy(); df_avg['filtered'] = df_avg['raw'].rolling(window=window_size).mean()
             st.altair_chart(alt.Chart(df_avg.melt('time', ['raw', 'filtered'])).mark_line().encode(
                 x='time:T', y='value:Q', color='variable:N'
             ).properties(height=450).interactive(), use_container_width=True)
 
         with t_ma:
-            df_ma = df_clean.copy()
-            df_ma['filtered'] = df_ma['raw'].rolling(window=window_size, center=True).mean()
+            df_ma = df_clean.copy(); df_ma['filtered'] = df_ma['raw'].rolling(window=window_size, center=True).mean()
             st.altair_chart(alt.Chart(df_ma.melt('time', ['raw', 'filtered'])).mark_line().encode(
                 x='time:T', y='value:Q', color='variable:N'
             ).properties(height=450).interactive(), use_container_width=True)
@@ -107,45 +106,55 @@ if uploaded_file is not None:
         with t_lp:
             try:
                 b, a = butter(4, 1/window_size, btype='low')
-                df_lp = df_clean.copy()
-                df_lp['filtered'] = filtfilt(b, a, df_lp['raw'])
+                df_lp = df_clean.copy(); df_lp['filtered'] = filtfilt(b, a, df_lp['raw'])
                 st.altair_chart(alt.Chart(df_lp.melt('time', ['raw', 'filtered'])).mark_line().encode(
                     x='time:T', y='value:Q', color='variable:N'
                 ).properties(height=450).interactive(), use_container_width=True)
             except:
                 st.error("Window terlalu kecil.")
 
-    # =========================
-    # 🌊 PASUT (WARNA FIX)
-    # =========================
+    # ==================================================
+    # 🔍 SCATTER (FIX BIAR MUNCUL)
+    # ==================================================
+    elif pilihan == "🔍 Analisis Scatter":
+        st.header("🔍 Analisis Scatter Plot")
+
+        col_x = st.selectbox("Pilih Variabel X", cols_num)
+        col_y = st.selectbox("Pilih Variabel Y", cols_num)
+
+        if col_x and col_y:
+            df_scatter = df[[col_x, col_y]].dropna()
+
+            chart = alt.Chart(df_scatter).mark_circle(size=60).encode(
+                x=col_x,
+                y=col_y,
+                tooltip=[col_x, col_y]
+            ).interactive().properties(height=500)
+
+            st.altair_chart(chart, use_container_width=True)
+
+    # ==================================================
+    # 🌊 PASUT (BIRU TUA vs MERAH)
+    # ==================================================
     elif pilihan == "🌊 Analisis Pasut":
         st.header("🌊 Analisis Pasang Surut")
 
         if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
-
-            data = df_clean['raw'].copy()
-
-            if data.max() > 50:
-                data = data / 100
-
-            data = data - data.mean()
+            data = df_clean['raw'] - df_clean['raw'].mean()
             time = df_clean['time'].values
 
-            with st.spinner('Menghitung Harmonik...'):
-                coef = utide.solve(time, data.values, lat=-6.0, method='ols', trend=False)
-                predict = utide.reconstruct(time, coef)
+            coef = utide.solve(time, data.values, lat=-6.0)
+            pred = utide.reconstruct(time, coef)
 
             df_pasut = pd.DataFrame({
                 'time': time,
                 'Observasi': data,
-                'Prediksi': predict.h
+                'Prediksi': pred.h
             })
-
-            st.subheader("Grafik Observasi vs Prediksi")
 
             chart = alt.Chart(df_pasut.melt('time')).mark_line().encode(
                 x='time:T',
-                y=alt.Y('value:Q', scale=alt.Scale(zero=False)),
+                y='value:Q',
                 color=alt.Color('variable:N',
                     scale=alt.Scale(domain=['Observasi','Prediksi'],
                                     range=['#00008B','#FF0000']))
@@ -153,70 +162,32 @@ if uploaded_file is not None:
 
             st.altair_chart(chart, use_container_width=True)
 
-            st.subheader("Konstanta Harmonik Utama")
-
             df_coef = pd.DataFrame({
                 "Komponen": coef.name,
                 "Amplitudo": coef.A,
                 "Fase": coef.g
             })
 
-            utama = ['M2', 'S2', 'K1', 'O1']
-            df_utama = df_coef[df_coef['Komponen'].isin(utama)].reset_index(drop=True)
-
-            col1, col2 = st.columns(2)
-            col1.table(df_utama)
-
-            try:
-                amps = dict(zip(df_utama['Komponen'], df_utama['Amplitudo']))
-                F = (amps['K1'] + amps['O1']) / (amps['M2'] + amps['S2'])
-
-                col2.metric("Bilangan Formzahl (F)", round(F, 3))
-
-                if F <= 0.25:
-                    tipe = "Harian Ganda (Semidiurnal)"
-                elif F <= 1.5:
-                    tipe = "Campuran Dominan Ganda"
-                elif F <= 3.0:
-                    tipe = "Campuran Dominan Tunggal"
-                else:
-                    tipe = "Harian Tunggal (Diurnal)"
-
-                col2.success(f"Tipe Pasut: {tipe}")
-
-            except:
-                col2.info("Data kurang panjang untuk hitung Formzahl")
+            utama = ['M2','S2','K1','O1']
+            st.table(df_coef[df_coef['Komponen'].isin(utama)])
 
         else:
-            st.warning("⚠️ Pilih data Water Level")
+            st.warning("Pilih data elevasi!")
 
-    # 🍃 WINDROSE (FIX TOTAL)
+    # ==================================================
+    # 🍃 WINDROSE (HITAM TEBAL)
+    # ==================================================
     elif pilihan == "🍃 Windrose":
-        st.header(f"🍃 Windrose ({target})")
-
         if "wind" in target.lower():
-            if "speed" in target.lower():
-                direction_col = 'wind_direction_avg'
-                df_rose = df[[target, direction_col]].copy()
-                df_rose['dir_bin'] = (np.round(df_rose[direction_col] / 22.5) * 22.5) % 360
-                
-                min_v, max_v = df_rose[target].min(), df_rose[target].max()
-                bins = np.linspace(min_v, max_v, 6)
-                labels = [f"{round(bins[i],1)}-{round(bins[i+1],1)}" for i in range(5)]
-                df_rose['range'] = pd.cut(df_rose[target], bins=bins, labels=labels, include_lowest=True)
-                
-                counts = df_rose.groupby(['dir_bin', 'range']).size().reset_index(name='count')
-                fig = px.bar_polar(counts, r="count", theta="dir_bin", color="range", template="plotly_dark")
-            else:
-                df_rose = df[[target]].copy()
-                df_rose['dir_bin'] = (np.round(df_rose[target] / 22.5) * 22.5) % 360
-                counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
-                fig = px.bar_polar(counts, r="count", theta="dir_bin", template="plotly_dark")
+            df_rose = df[[target]].copy()
+            df_rose['dir_bin'] = (np.round(df_rose[target]/22.5)*22.5)%360
+            counts = df_rose.groupby('dir_bin').size().reset_index(name='count')
+
+            fig = px.bar_polar(counts, r="count", theta="dir_bin", template="plotly_dark")
 
             fig.update_layout(
                 polar=dict(
                     angularaxis=dict(
-                        tickmode='array',
                         tickvals=[0,45,90,135,180,225,270,315],
                         ticktext=['N','NE','E','SE','S','SW','W','NW'],
                         tickfont=dict(size=14, color='black', family='Arial Black'),
@@ -230,5 +201,14 @@ if uploaded_file is not None:
         else:
             st.error("Pilih variabel wind")
 
+    # --- CTD ---
+    elif pilihan == "🌡️ Profil CTD":
+        if 'pressure' in df.columns:
+            st.altair_chart(
+                alt.Chart(df).mark_line().encode(
+                    x=target,
+                    y=alt.Y('pressure', sort='descending')
+                ).interactive(), use_container_width=True)
+
 else:
-    st.info("👋 Halo! Silahkan Upload File")
+    st.info("👋 Upload file dulu ya")
