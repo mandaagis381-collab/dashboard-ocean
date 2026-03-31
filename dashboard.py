@@ -57,7 +57,6 @@ if uploaded_file is not None:
 
         df_plot = df[['timestamp', target]].dropna()
 
-        # REMOVE OUTLIER (IQR)
         Q1 = df_plot[target].quantile(0.25)
         Q3 = df_plot[target].quantile(0.75)
         IQR = Q3 - Q1
@@ -86,7 +85,6 @@ if uploaded_file is not None:
 
             df_scatter = df[[col_x, col_y]].dropna()
 
-            # FILTER OUTLIER
             for col in [col_x, col_y]:
                 Q1 = df_scatter[col].quantile(0.25)
                 Q3 = df_scatter[col].quantile(0.75)
@@ -117,7 +115,6 @@ if uploaded_file is not None:
 
             df_pasut = df[['timestamp','water_level']].dropna()
 
-            # CUT DATA
             df_pasut = df_pasut[
                 (df_pasut['water_level'] >= 300) &
                 (df_pasut['water_level'] <= 400)
@@ -176,9 +173,6 @@ if uploaded_file is not None:
 
             st.table(df_utama)
 
-            # =========================
-            # FORMZAHL
-            # =========================
             try:
                 M2 = df_utama[df_utama['Komponen']=='M2']['Amplitudo'].values[0]
                 S2 = df_utama[df_utama['Komponen']=='S2']['Amplitudo'].values[0]
@@ -210,52 +204,64 @@ if uploaded_file is not None:
             st.error("Tidak ada water_level")
 
 # =========================
-# WINDROSE (DIPERBAIKI)
+# WINDROSE (YANG SUDAH DIUBAH)
 # =========================
     elif pilihan == "🍃 Windrose":
 
         st.header("Windrose")
 
-        if 'wind_direction_avg' in df.columns and 'wind_speed_avg' in df.columns:
+        wind_cols = [col for col in df.columns if "wind" in col.lower()]
 
-            df_wind = df[['wind_direction_avg','wind_speed_avg']].dropna()
+        if len(wind_cols) > 0:
 
-            dir = df_wind['wind_direction_avg']
-            speed = df_wind['wind_speed_avg']
+            st.info("Pilih yang wind ya")
 
-            bins_dir = np.arange(0,361,30)
-            bins_speed = [0,2,4,6,8,10,15]
+            col_dir = st.selectbox("Pilih arah angin (direction)", wind_cols)
+            col_spd = st.selectbox("Pilih kecepatan angin (speed)", wind_cols)
 
-            df_wind['dir_bin'] = pd.cut(dir, bins_dir)
-            df_wind['spd_bin'] = pd.cut(speed, bins_speed)
+            if col_dir != col_spd:
 
-            table = pd.crosstab(df_wind['dir_bin'], df_wind['spd_bin'])
+                df_wind = df[[col_dir, col_spd]].dropna()
 
-            theta = bins_dir[:-1]
+                dir = df_wind[col_dir]
+                speed = df_wind[col_spd]
 
-            fig = go.Figure()
+                bins_dir = np.arange(0,361,30)
+                bins_speed = [0,2,4,6,8,10,15]
 
-            for i, col in enumerate(table.columns):
-                fig.add_trace(go.Barpolar(
-                    r=table[col],
-                    theta=theta,
-                    name=str(col)
-                ))
+                df_wind['dir_bin'] = pd.cut(dir, bins_dir)
+                df_wind['spd_bin'] = pd.cut(speed, bins_speed)
 
-            fig.update_layout(
-                template="plotly_dark",
-                polar=dict(
-                    angularaxis=dict(
-                        rotation=90,
-                        direction='clockwise'
+                table = pd.crosstab(df_wind['dir_bin'], df_wind['spd_bin'])
+
+                theta = bins_dir[:-1]
+
+                fig = go.Figure()
+
+                for col in table.columns:
+                    fig.add_trace(go.Barpolar(
+                        r=table[col],
+                        theta=theta,
+                        name=str(col)
+                    ))
+
+                fig.update_layout(
+                    template="plotly_dark",
+                    polar=dict(
+                        angularaxis=dict(
+                            rotation=90,
+                            direction='clockwise'
+                        )
                     )
                 )
-            )
 
-            st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
+
+            else:
+                st.warning("Direction dan speed harus beda")
 
         else:
-            st.error("Kolom wind tidak ditemukan")
+            st.error("Tidak ada kolom wind")
 
 else:
     st.info("Upload file dulu ya")
