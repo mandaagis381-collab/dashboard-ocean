@@ -34,13 +34,14 @@ with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
     
     all_options = ["🏠 Dashboard", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose"]
+    
     st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
     pilihan = st.radio("Navigasi", all_options, label_visibility="collapsed")
     
     st.markdown("---")
     uploaded_file = st.file_uploader("Upload File CSV/Excel", type=["csv", "xlsx"])
 
-# --- 3. LOGIKA DATA ---
+# --- 3. DATA ---
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file, sep=None, engine='python')
     if 'timestamp' in df.columns:
@@ -59,7 +60,7 @@ if uploaded_file is not None:
         st.header(f"🏠 Dashboard: {target}")
         st.dataframe(df_clean.head(100), use_container_width=True)
 
-    # --- DATA CLEANING ---
+    # --- CLEANING ---
     elif pilihan == "📂 Data Cleaning":
         st.header("📂 Preprocessing: Despiking")
         thresh = st.slider("Threshold (Std Dev):", 1.0, 5.0, 3.0)
@@ -67,7 +68,9 @@ if uploaded_file is not None:
         df_cleaned = df_clean[((df_clean['raw'] - mean).abs() / std) <= thresh].copy()
         st.line_chart(df_cleaned.set_index('time')['raw'])
 
-    # --- VISUALISASI (PERSIS PUNYAMU) ---
+    # ==================================================
+    # 📈 VISUALISASI (PERSIS PUNYA KAMU)
+    # ==================================================
     elif pilihan == "📈 Visualisasi":
         st.header("📈 Analisis Deret Waktu (Time Series)")
         st.sidebar.markdown("### Setting Filter")
@@ -83,76 +86,111 @@ if uploaded_file is not None:
         t_raw, t_avg, t_ma, t_lp = st.tabs(["📄 Data Raw", "📊 Averaging", "📈 Moving Average", "📉 Low Pass"])
         
         with t_raw:
-            st.altair_chart(alt.Chart(df_clean).mark_line(color='#00d4ff').encode(x='time:T', y=alt.Y('raw:Q', scale=alt.Scale(zero=False))).properties(height=450).interactive(), use_container_width=True)
+            st.altair_chart(alt.Chart(df_clean).mark_line(color='#00d4ff').encode(
+                x='time:T',
+                y=alt.Y('raw:Q', scale=alt.Scale(zero=False))
+            ).properties(height=450).interactive(), use_container_width=True)
         
         with t_avg:
             df_avg = df_clean.copy(); df_avg['filtered'] = df_avg['raw'].rolling(window=window_size).mean()
-            st.altair_chart(alt.Chart(df_avg.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
+            st.altair_chart(alt.Chart(df_avg.melt('time', ['raw', 'filtered'])).mark_line().encode(
+                x='time:T', y='value:Q', color='variable:N'
+            ).properties(height=450).interactive(), use_container_width=True)
 
         with t_ma:
             df_ma = df_clean.copy(); df_ma['filtered'] = df_ma['raw'].rolling(window=window_size, center=True).mean()
-            st.altair_chart(alt.Chart(df_ma.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
+            st.altair_chart(alt.Chart(df_ma.melt('time', ['raw', 'filtered'])).mark_line().encode(
+                x='time:T', y='value:Q', color='variable:N'
+            ).properties(height=450).interactive(), use_container_width=True)
 
         with t_lp:
             try:
                 b, a = butter(4, 1/window_size, btype='low')
                 df_lp = df_clean.copy(); df_lp['filtered'] = filtfilt(b, a, df_lp['raw'])
-                st.altair_chart(alt.Chart(df_lp.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
-            except: st.error("Window terlalu kecil.")
+                st.altair_chart(alt.Chart(df_lp.melt('time', ['raw', 'filtered'])).mark_line().encode(
+                    x='time:T', y='value:Q', color='variable:N'
+                ).properties(height=450).interactive(), use_container_width=True)
+            except:
+                st.error("Window terlalu kecil.")
 
-    # --- SCATTER (AMAN, GA DIUBAH) ---
+    # ==================================================
+    # 🔍 SCATTER
+    # ==================================================
     elif pilihan == "🔍 Analisis Scatter":
-        st.header("🔍 Analisis Scatter")
-        x_var = st.selectbox("Pilih X:", cols_num)
-        y_var = st.selectbox("Pilih Y:", cols_num)
+        st.header("🔍 Analisis Scatter Plot")
 
-        fig = px.scatter(df, x=x_var, y=y_var, template="plotly_dark")
-        st.plotly_chart(fig, use_container_width=True)
+        col_x = st.selectbox("Pilih Variabel X", cols_num)
+        col_y = st.selectbox("Pilih Variabel Y", cols_num)
 
-    # --- PASUT ---
+        if col_x and col_y:
+            df_scatter = df[[col_x, col_y]].dropna()
+
+            chart = alt.Chart(df_scatter).mark_circle(size=60).encode(
+                x=col_x,
+                y=col_y,
+                tooltip=[col_x, col_y]
+            ).interactive().properties(height=500)
+
+            st.altair_chart(chart, use_container_width=True)
+
+    # ==================================================
+    # 🌊 PASUT
+    # ==================================================
     elif pilihan == "🌊 Analisis Pasut":
         st.header("🌊 Analisis Pasang Surut")
+
         if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
-            time_hours = (df_clean['time'] - df_clean['time'].min()).dt.total_seconds() / 3600
-            
-            coef = utide.solve(time_hours.values, df_clean['raw'].values, lat=-6.0)
-            predict = utide.reconstruct(time_hours.values, coef)
+            data = df_clean['raw'] - df_clean['raw'].mean()
+            time = df_clean['time'].values
 
-            df_pasut = df_clean.copy()
-            df_pasut['Prediksi'] = predict.h
+            coef = utide.solve(time, data.values, lat=-6.0)
+            pred = utide.reconstruct(time, coef)
 
-            chart = alt.Chart(df_pasut.melt('time', ['raw', 'Prediksi'])).mark_line().encode(
+            df_pasut = pd.DataFrame({
+                'time': time,
+                'Observasi': data,
+                'Prediksi': pred.h
+            })
+
+            chart = alt.Chart(df_pasut.melt('time')).mark_line().encode(
                 x='time:T',
-                y=alt.Y('value:Q', scale=alt.Scale(zero=False)),
-                color=alt.Color('variable:N', scale=alt.Scale(range=['#003366', '#ff0000']))
+                y='value:Q',
+                color=alt.Color('variable:N',
+                    scale=alt.Scale(domain=['Observasi','Prediksi'],
+                                    range=['#00008B','#FF0000']))
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
 
-            df_coef = pd.DataFrame({"Komponen": coef.name, "Amplitudo": coef.A})
-            st.dataframe(df_coef)
+            df_coef = pd.DataFrame({
+                "Komponen": coef.name,
+                "Amplitudo": coef.A,
+                "Fase": coef.g
+            })
+
+            utama = ['M2','S2','K1','O1']
+            st.table(df_coef[df_coef['Komponen'].isin(utama)])
 
         else:
-            st.warning("Pilih data water level!")
+            st.warning("Pilih data elevasi!")
 
-    # --- WINDROSE (LABEL HITAM TEBAL) ---
+    # ==================================================
+    # 🍃 WINDROSE
+    # ==================================================
     elif pilihan == "🍃 Windrose":
-        st.header(f"🍃 Windrose ({target})")
-
         if "wind" in target.lower():
             df_rose = df[[target]].copy()
-            df_rose['dir_bin'] = (np.round(df_rose[target] / 22.5) * 22.5) % 360
-            counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
+            df_rose['dir_bin'] = (np.round(df_rose[target]/22.5)*22.5)%360
+            counts = df_rose.groupby('dir_bin').size().reset_index(name='count')
 
             fig = px.bar_polar(counts, r="count", theta="dir_bin", template="plotly_dark")
 
             fig.update_layout(
                 polar=dict(
                     angularaxis=dict(
-                        tickmode='array',
                         tickvals=[0,45,90,135,180,225,270,315],
                         ticktext=['N','NE','E','SE','S','SW','W','NW'],
-                        tickfont=dict(color="black", size=14),
+                        tickfont=dict(size=14, color='black', family='Arial Black'),
                         rotation=90,
                         direction='clockwise'
                     )
