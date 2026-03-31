@@ -148,7 +148,11 @@ if uploaded_file is not None:
             st.subheader("Grafik Observasi vs Prediksi")
             chart = alt.Chart(df_pasut.melt('time')).mark_line().encode(
                 x='time:T',
-                y=alt.Y('value:Q', scale=alt.Scale(zero=False)),
+                y=alt.Y(
+                    'value:Q',
+                    scale=alt.Scale(domain=[-2, 2]),
+                    title='Elevasi Muka Air Laut (m)'
+                ),
                 color='variable:N'
             ).properties(height=400).interactive()
 
