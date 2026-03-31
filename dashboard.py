@@ -200,15 +200,5 @@ if uploaded_file is not None:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.error("Pilih variabel wind")
-
-    # --- CTD ---
-    elif pilihan == "🌡️ Profil CTD":
-        if 'pressure' in df.columns:
-            st.altair_chart(
-                alt.Chart(df).mark_line().encode(
-                    x=target,
-                    y=alt.Y('pressure', sort='descending')
-                ).interactive(), use_container_width=True)
-
 else:
     st.info("👋 Upload file dulu ya")
