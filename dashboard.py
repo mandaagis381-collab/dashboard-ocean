@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as st 
 import pandas as pd
 import altair as alt
 import numpy as np
@@ -33,7 +33,7 @@ with st.sidebar:
     st.caption("Platform Analisis Data Kelautan")
     st.markdown("<br>", unsafe_allow_html=True)
     
-    all_options = ["🏠 Dashboard", "📊 Statistika Data", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose"]
+    all_options = ["🏠 Dashboard", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose"]
     
     st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
     pilihan = st.radio("Navigasi", all_options, label_visibility="collapsed")
@@ -59,24 +59,6 @@ if uploaded_file is not None:
     if pilihan == "🏠 Dashboard":
         st.header(f"🏠 Dashboard: {target}")
         st.dataframe(df_clean.head(100), use_container_width=True)
-
-    # ===================== TAMBAHAN =====================
-    elif pilihan == "📊 Statistika Data":
-        st.header("📊 Statistika Data")
-
-        stats = pd.DataFrame({
-            "Metric": ["Min", "Max", "Mean", "Standard Deviation", "Count"],
-            "Nilai": [
-                df_clean['raw'].min(),
-                df_clean['raw'].max(),
-                df_clean['raw'].mean(),
-                df_clean['raw'].std(),
-                df_clean['raw'].count()
-            ]
-        })
-
-        st.table(stats)
-    # ==================================================
 
     elif pilihan == "📂 Data Cleaning":
         st.header("📂 Preprocessing: Despiking")
@@ -104,52 +86,43 @@ if uploaded_file is not None:
                 x='time:T',
                 y=alt.Y('raw:Q', scale=alt.Scale(zero=False))
             ).properties(height=450).interactive(), use_container_width=True)
-        
-        with t_avg:
-            df_avg = df_clean.copy()
-            df_avg['filtered'] = df_avg['raw'].rolling(window=window_size).mean()
-            st.altair_chart(alt.Chart(df_avg.melt('time', ['raw', 'filtered'])).mark_line().encode(
-                x='time:T', y='value:Q', color='variable:N'
-            ).properties(height=450).interactive(), use_container_width=True)
 
-        with t_ma:
-            df_ma = df_clean.copy()
-            df_ma['filtered'] = df_ma['raw'].rolling(window=window_size, center=True).mean()
-            st.altair_chart(alt.Chart(df_ma.melt('time', ['raw', 'filtered'])).mark_line().encode(
-                x='time:T', y='value:Q', color='variable:N'
-            ).properties(height=450).interactive(), use_container_width=True)
+    elif pilihan == "🔍 Analisis Scatter":
+        st.header("🔍 Analisis Scatter")
 
-        with t_lp:
-            try:
-                b, a = butter(4, 1/window_size, btype='low')
-                df_lp = df_clean.copy()
-                df_lp['filtered'] = filtfilt(b, a, df_lp['raw'])
-                st.altair_chart(alt.Chart(df_lp.melt('time', ['raw', 'filtered'])).mark_line().encode(
-                    x='time:T', y='value:Q', color='variable:N'
-                ).properties(height=450).interactive(), use_container_width=True)
-            except:
-                st.error("Window terlalu kecil.")
+        cols = df.select_dtypes(include=[np.number]).columns.tolist()
+
+        col1, col2 = st.columns(2)
+        x_var = col1.selectbox("Pilih Variabel X:", cols, index=0)
+        y_var = col2.selectbox("Pilih Variabel Y:", cols, index=1 if len(cols) > 1 else 0)
+
+        df_scatter = df[[x_var, y_var]].dropna()
+
+        # STYLE MENGIKUTI CONTOH (pakai plotly_dark + title)
+        fig = px.scatter(
+            df_scatter,
+            x=x_var,
+            y=y_var,
+            template="plotly_dark",
+            title=f"Scatter Plot: {x_var} vs {y_var}"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        corr = df_scatter[x_var].corr(df_scatter[y_var])
+        st.metric("Koefisien Korelasi", round(corr, 3))
 
     elif pilihan == "🌊 Analisis Pasut":
-        st.header("🌊 Analisis Pasang Surut")
+        st.header("🌊 Modul: Analisis Pasang Surut")
 
         if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
-
-            data = df_clean['raw'].copy()
-
-            # FIX 1: cm → meter
-            if data.max() > 50:
-                data = data / 100
-
-            # FIX 2: hilangkan offset
-            data = data - data.mean()
 
             time = df_clean['time'].values
 
             with st.spinner('Menghitung Harmonik...'):
                 coef = utide.solve(
                     time,
-                    data.values,
+                    df_clean['raw'].values,
                     lat=-6.0,
                     method='ols',
                     trend=False
@@ -157,60 +130,20 @@ if uploaded_file is not None:
 
                 predict = utide.reconstruct(time, coef)
 
-            df_pasut = pd.DataFrame({
-                'time': time,
-                'observasi': data,
-                'prediksi': predict.h
-            })
+            df_pasut = df_clean.copy()
+            df_pasut['Prediksi'] = predict.h
 
             st.subheader("Grafik Observasi vs Prediksi")
-            chart = alt.Chart(df_pasut.melt('time')).mark_line().encode(
+            chart = alt.Chart(df_pasut.melt('time', ['raw', 'Prediksi'])).mark_line().encode(
                 x='time:T',
                 y=alt.Y('value:Q', scale=alt.Scale(zero=False)),
-                color='variable:N'
+                color=alt.Color('variable:N', scale=alt.Scale(range=['#00d4ff', '#ff4b4b']))
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
 
-            st.subheader("Konstanta Harmonik Utama")
-
-            df_coef = pd.DataFrame({
-                "Komponen": coef.name,
-                "Amplitudo": coef.A,
-                "Fase": coef.g
-            })
-
-            utama = ['M2', 'S2', 'K1', 'O1']
-            df_utama = df_coef[df_coef['Komponen'].isin(utama)].reset_index(drop=True)
-
-            col1, col2 = st.columns(2)
-            col1.table(df_utama)
-
-            try:
-                amps = dict(zip(df_utama['Komponen'], df_utama['Amplitudo']))
-                F = (amps['K1'] + amps['O1']) / (amps['M2'] + amps['S2'])
-
-                col2.metric("Bilangan Formzahl (F)", round(F, 3))
-
-                if F <= 0.25:
-                    tipe = "Harian Ganda (Semidiurnal)"
-                elif F <= 1.5:
-                    tipe = "Campuran Dominan Ganda"
-                elif F <= 3.0:
-                    tipe = "Campuran Dominan Tunggal"
-                else:
-                    tipe = "Harian Tunggal (Diurnal)"
-
-                col2.success(f"Tipe Pasut: {tipe}")
-
-            except:
-                col2.info("Data kurang panjang untuk hitung Formzahl")
-
-        else:
-            st.warning("⚠️ Pilih data Water Level")
-
     elif pilihan == "🍃 Windrose":
-        st.header(f"🍃 Windrose ({target})")
+        st.header(f"🍃 Modul: Windrose ({target})")
 
         if "wind" in target.lower():
             if "speed" in target.lower():
@@ -234,11 +167,11 @@ if uploaded_file is not None:
             fig.update_layout(
                 polar=dict(
                     angularaxis=dict(
-                        tickmode='array',
-                        tickvals=[0,45,90,135,180,225,270,315],
-                        ticktext=['N','NE','E','SE','S','SW','W','NW'],
                         rotation=90,
-                        direction='clockwise'
+                        direction='clockwise',
+                        tickmode='array',
+                        tickvals=[0, 90, 180, 270],
+                        ticktext=['N', 'E', 'S', 'W']
                     )
                 )
             )
