@@ -119,24 +119,15 @@ if uploaded_file is not None:
 
             data = df_clean['raw'].copy()
 
-            # FIX 1: cm → meter
             if data.max() > 50:
                 data = data / 100
 
-            # FIX 2: hilangkan offset
             data = data - data.mean()
 
             time = df_clean['time'].values
 
             with st.spinner('Menghitung Harmonik...'):
-                coef = utide.solve(
-                    time,
-                    data.values,
-                    lat=-6.0,
-                    method='ols',
-                    trend=False
-                )
-
+                coef = utide.solve(time, data.values, lat=-6.0, method='ols', trend=False)
                 predict = utide.reconstruct(time, coef)
 
             df_pasut = pd.DataFrame({
@@ -148,12 +139,14 @@ if uploaded_file is not None:
             st.subheader("Grafik Observasi vs Prediksi")
             chart = alt.Chart(df_pasut.melt('time')).mark_line().encode(
                 x='time:T',
-                y=alt.Y(
-                    'value:Q',
-                    scale=alt.Scale(domain=[-2, 2]),
-                    title='Elevasi Muka Air Laut (m)'
-                ),
-                color='variable:N'
+                y=alt.Y('value:Q', scale=alt.Scale(domain=[-2, 2]), title='Elevasi Muka Air Laut (m)'),
+                color=alt.Color('variable:N',
+                    scale=alt.Scale(
+                        domain=['observasi', 'prediksi'],
+                        range=['#1f77b4', '#ff0000']  # biru & merah
+                    ),
+                    legend=alt.Legend(title="Keterangan")
+                )
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
@@ -224,7 +217,8 @@ if uploaded_file is not None:
                         tickvals=[0,45,90,135,180,225,270,315],
                         ticktext=['N','NE','E','SE','S','SW','W','NW'],
                         rotation=90,
-                        direction='clockwise'
+                        direction='clockwise',
+                        tickfont=dict(size=14, color='white', family='Arial Black')
                     )
                 )
             )
