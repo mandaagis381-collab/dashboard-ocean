@@ -33,6 +33,7 @@ with st.sidebar:
     st.caption("Platform Analisis Data Kelautan")
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # ❌ CTD DIHAPUS DI SINI
     all_options = ["🏠 Dashboard", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose"]
     
     st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
@@ -68,9 +69,7 @@ if uploaded_file is not None:
         df_cleaned = df_clean[((df_clean['raw'] - mean).abs() / std) <= thresh].copy()
         st.line_chart(df_cleaned.set_index('time')['raw'])
 
-    # ==================================================
-    # 📈 VISUALISASI (PERSIS PUNYA KAMU)
-    # ==================================================
+    # --- VISUALISASI (TIDAK DIUBAH) ---
     elif pilihan == "📈 Visualisasi":
         st.header("📈 Analisis Deret Waktu (Time Series)")
         st.sidebar.markdown("### Setting Filter")
@@ -113,9 +112,7 @@ if uploaded_file is not None:
             except:
                 st.error("Window terlalu kecil.")
 
-    # ==================================================
-    # 🔍 SCATTER
-    # ==================================================
+    # --- SCATTER (TIDAK DIUBAH) ---
     elif pilihan == "🔍 Analisis Scatter":
         st.header("🔍 Analisis Scatter Plot")
 
@@ -133,9 +130,7 @@ if uploaded_file is not None:
 
             st.altair_chart(chart, use_container_width=True)
 
-    # ==================================================
-    # 🌊 PASUT
-    # ==================================================
+    # --- PASUT (DITAMBAH FORMZAHL) ---
     elif pilihan == "🌊 Analisis Pasut":
         st.header("🌊 Analisis Pasang Surut")
 
@@ -162,6 +157,7 @@ if uploaded_file is not None:
 
             st.altair_chart(chart, use_container_width=True)
 
+            # konstanta utama
             df_coef = pd.DataFrame({
                 "Komponen": coef.name,
                 "Amplitudo": coef.A,
@@ -169,14 +165,35 @@ if uploaded_file is not None:
             })
 
             utama = ['M2','S2','K1','O1']
-            st.table(df_coef[df_coef['Komponen'].isin(utama)])
+            df_utama = df_coef[df_coef['Komponen'].isin(utama)].reset_index(drop=True)
+
+            c1, c2 = st.columns(2)
+            c1.table(df_utama)
+
+            try:
+                amps = dict(zip(df_utama['Komponen'], df_utama['Amplitudo']))
+                F = (amps['K1'] + amps['O1']) / (amps['M2'] + amps['S2'])
+
+                c2.metric("Bilangan Formzahl (F)", round(F,3))
+
+                if F <= 0.25:
+                    tipe = "Harian Ganda (Semidiurnal)"
+                elif F <= 1.5:
+                    tipe = "Campuran Dominan Ganda"
+                elif F <= 3.0:
+                    tipe = "Campuran Dominan Tunggal"
+                else:
+                    tipe = "Harian Tunggal (Diurnal)"
+
+                c2.success(f"Tipe Pasut: {tipe}")
+
+            except:
+                c2.info("Data kurang panjang untuk hitung Formzahl")
 
         else:
             st.warning("Pilih data elevasi!")
 
-    # ==================================================
-    # 🍃 WINDROSE
-    # ==================================================
+    # --- WINDROSE (TIDAK DIUBAH) ---
     elif pilihan == "🍃 Windrose":
         if "wind" in target.lower():
             df_rose = df[[target]].copy()
