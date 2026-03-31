@@ -117,10 +117,14 @@ if uploaded_file is not None:
 
         if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
 
-            # ✅ FIX SKALA (hindari cm → m)
             data = df_clean['raw'].copy()
+
+            # FIX 1: cm → meter
             if data.max() > 50:
                 data = data / 100
+
+            # FIX 2: hilangkan offset
+            data = data - data.mean()
 
             time = df_clean['time'].values
 
@@ -135,12 +139,14 @@ if uploaded_file is not None:
 
                 predict = utide.reconstruct(time, coef)
 
-            df_pasut = df_clean.copy()
-            df_pasut['raw_fixed'] = data
-            df_pasut['Prediksi'] = predict.h
+            df_pasut = pd.DataFrame({
+                'time': time,
+                'observasi': data,
+                'prediksi': predict.h
+            })
 
             st.subheader("Grafik Observasi vs Prediksi")
-            chart = alt.Chart(df_pasut.melt('time', ['raw_fixed', 'Prediksi'])).mark_line().encode(
+            chart = alt.Chart(df_pasut.melt('time')).mark_line().encode(
                 x='time:T',
                 y=alt.Y('value:Q', scale=alt.Scale(zero=False)),
                 color='variable:N'
@@ -148,7 +154,6 @@ if uploaded_file is not None:
 
             st.altair_chart(chart, use_container_width=True)
 
-            # --- PERHITUNGAN ---
             st.subheader("Konstanta Harmonik Utama")
 
             df_coef = pd.DataFrame({
@@ -161,7 +166,6 @@ if uploaded_file is not None:
             df_utama = df_coef[df_coef['Komponen'].isin(utama)].reset_index(drop=True)
 
             col1, col2 = st.columns(2)
-
             col1.table(df_utama)
 
             try:
@@ -209,7 +213,6 @@ if uploaded_file is not None:
                 counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
                 fig = px.bar_polar(counts, r="count", theta="dir_bin", template="plotly_dark")
 
-            # ✅ TAMBAHAN ARAH ANGIN
             fig.update_layout(
                 polar=dict(
                     angularaxis=dict(
