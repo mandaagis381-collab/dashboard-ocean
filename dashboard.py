@@ -113,16 +113,21 @@ if uploaded_file is not None:
                 st.error("Window terlalu kecil.")
 
     elif pilihan == "🌊 Analisis Pasut":
-        st.header("🌊 Modul: Analisis Pasang Surut")
+        st.header("🌊 Analisis Pasang Surut")
 
         if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
+
+            # ✅ FIX SKALA (hindari cm → m)
+            data = df_clean['raw'].copy()
+            if data.max() > 50:
+                data = data / 100
 
             time = df_clean['time'].values
 
             with st.spinner('Menghitung Harmonik...'):
                 coef = utide.solve(
                     time,
-                    df_clean['raw'].values,
+                    data.values,
                     lat=-6.0,
                     method='ols',
                     trend=False
@@ -131,18 +136,19 @@ if uploaded_file is not None:
                 predict = utide.reconstruct(time, coef)
 
             df_pasut = df_clean.copy()
+            df_pasut['raw_fixed'] = data
             df_pasut['Prediksi'] = predict.h
 
             st.subheader("Grafik Observasi vs Prediksi")
-            chart = alt.Chart(df_pasut.melt('time', ['raw', 'Prediksi'])).mark_line().encode(
+            chart = alt.Chart(df_pasut.melt('time', ['raw_fixed', 'Prediksi'])).mark_line().encode(
                 x='time:T',
                 y=alt.Y('value:Q', scale=alt.Scale(zero=False)),
-                color=alt.Color('variable:N', scale=alt.Scale(range=['#00d4ff', '#ff4b4b']))
+                color='variable:N'
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
 
-            # --- TAMBAHAN PERHITUNGAN ---
+            # --- PERHITUNGAN ---
             st.subheader("Konstanta Harmonik Utama")
 
             df_coef = pd.DataFrame({
@@ -182,7 +188,7 @@ if uploaded_file is not None:
             st.warning("⚠️ Pilih data Water Level")
 
     elif pilihan == "🍃 Windrose":
-        st.header(f"🍃 Modul: Windrose ({target})")
+        st.header(f"🍃 Windrose ({target})")
 
         if "wind" in target.lower():
             if "speed" in target.lower():
@@ -203,7 +209,19 @@ if uploaded_file is not None:
                 counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
                 fig = px.bar_polar(counts, r="count", theta="dir_bin", template="plotly_dark")
 
-            fig.update_layout(polar=dict(angularaxis=dict(rotation=90, direction='clockwise')))
+            # ✅ TAMBAHAN ARAH ANGIN
+            fig.update_layout(
+                polar=dict(
+                    angularaxis=dict(
+                        tickmode='array',
+                        tickvals=[0,45,90,135,180,225,270,315],
+                        ticktext=['N','NE','E','SE','S','SW','W','NW'],
+                        rotation=90,
+                        direction='clockwise'
+                    )
+                )
+            )
+
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.error("Pilih variabel wind")
