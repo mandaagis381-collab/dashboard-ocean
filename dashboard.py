@@ -67,6 +67,57 @@ if uploaded_file is not None:
         df_cleaned = df_clean[((df_clean['raw'] - mean).abs() / std) <= thresh].copy()
         st.line_chart(df_cleaned.set_index('time')['raw'])
 
+    # =========================
+    # 🔥 VISUALISASI (TIDAK DIUBAH SESUAI PUNYAMU)
+    # =========================
+    elif pilihan == "📈 Visualisasi":
+        st.header("📈 Analisis Deret Waktu (Time Series)")
+        st.sidebar.markdown("### Setting Filter")
+        pilihan_jam = st.sidebar.selectbox("Pilih Jendela Waktu:", ["1 Jam", "3 Jam", "12 Jam", "24 Jam", "25 Jam (Eliminasi Pasut)", "Custom"])
+        
+        if pilihan_jam == "1 Jam": window_size = 60
+        elif pilihan_jam == "3 Jam": window_size = 180
+        elif pilihan_jam == "12 Jam": window_size = 720
+        elif pilihan_jam == "24 Jam": window_size = 1440
+        elif pilihan_jam == "25 Jam (Eliminasi Pasut)": window_size = 1500
+        else: window_size = st.sidebar.number_input("Masukkan Jumlah Poin:", 5, 5000, 60)
+
+        t_raw, t_avg, t_ma, t_lp = st.tabs(["📄 Data Raw", "📊 Averaging", "📈 Moving Average", "📉 Low Pass"])
+        
+        with t_raw:
+            st.altair_chart(alt.Chart(df_clean).mark_line(color='#00d4ff').encode(
+                x='time:T',
+                y=alt.Y('raw:Q', scale=alt.Scale(zero=False))
+            ).properties(height=450).interactive(), use_container_width=True)
+        
+        with t_avg:
+            df_avg = df_clean.copy()
+            df_avg['filtered'] = df_avg['raw'].rolling(window=window_size).mean()
+            st.altair_chart(alt.Chart(df_avg.melt('time', ['raw', 'filtered'])).mark_line().encode(
+                x='time:T', y='value:Q', color='variable:N'
+            ).properties(height=450).interactive(), use_container_width=True)
+
+        with t_ma:
+            df_ma = df_clean.copy()
+            df_ma['filtered'] = df_ma['raw'].rolling(window=window_size, center=True).mean()
+            st.altair_chart(alt.Chart(df_ma.melt('time', ['raw', 'filtered'])).mark_line().encode(
+                x='time:T', y='value:Q', color='variable:N'
+            ).properties(height=450).interactive(), use_container_width=True)
+
+        with t_lp:
+            try:
+                b, a = butter(4, 1/window_size, btype='low')
+                df_lp = df_clean.copy()
+                df_lp['filtered'] = filtfilt(b, a, df_lp['raw'])
+                st.altair_chart(alt.Chart(df_lp.melt('time', ['raw', 'filtered'])).mark_line().encode(
+                    x='time:T', y='value:Q', color='variable:N'
+                ).properties(height=450).interactive(), use_container_width=True)
+            except:
+                st.error("Window terlalu kecil.")
+
+    # =========================
+    # 🌊 PASUT (WARNA FIX)
+    # =========================
     elif pilihan == "🌊 Analisis Pasut":
         st.header("🌊 Analisis Pasang Surut")
 
@@ -78,24 +129,16 @@ if uploaded_file is not None:
                 data = data / 100
 
             data = data - data.mean()
-
             time = df_clean['time'].values
 
             with st.spinner('Menghitung Harmonik...'):
-                coef = utide.solve(
-                    time,
-                    data.values,
-                    lat=-6.0,
-                    method='ols',
-                    trend=False
-                )
-
+                coef = utide.solve(time, data.values, lat=-6.0, method='ols', trend=False)
                 predict = utide.reconstruct(time, coef)
 
             df_pasut = pd.DataFrame({
                 'time': time,
-                'observasi': data,
-                'prediksi': predict.h
+                'Observasi': data,
+                'Prediksi': predict.h
             })
 
             st.subheader("Grafik Observasi vs Prediksi")
@@ -103,13 +146,9 @@ if uploaded_file is not None:
             chart = alt.Chart(df_pasut.melt('time')).mark_line().encode(
                 x='time:T',
                 y=alt.Y('value:Q', scale=alt.Scale(zero=False)),
-                color=alt.Color(
-                    'variable:N',
-                    scale=alt.Scale(
-                        domain=['observasi', 'prediksi'],
-                        range=['#003366', 'red']  # 🔥 FINAL: biru tua & merah
-                    )
-                )
+                color=alt.Color('variable:N',
+                    scale=alt.Scale(domain=['Observasi','Prediksi'],
+                                    range=['#00008B','#FF0000']))
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
@@ -148,6 +187,10 @@ if uploaded_file is not None:
             except:
                 col2.info("Data kurang panjang untuk hitung Formzahl")
 
+        else:
+            st.warning("⚠️ Pilih data Water Level")
+
+    # 🍃 WINDROSE (FIX TOTAL)
     elif pilihan == "🍃 Windrose":
         st.header(f"🍃 Windrose ({target})")
 
@@ -176,7 +219,7 @@ if uploaded_file is not None:
                         tickmode='array',
                         tickvals=[0,45,90,135,180,225,270,315],
                         ticktext=['N','NE','E','SE','S','SW','W','NW'],
-                        tickfont=dict(size=14, color="black", family="Arial Black"),
+                        tickfont=dict(size=14, color='black', family='Arial Black'),
                         rotation=90,
                         direction='clockwise'
                     )
