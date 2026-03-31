@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import numpy as np
-import plotly.express as px
 import plotly.graph_objects as go
 from scipy.signal import butter, filtfilt
 import utide
 
-# --- 1. CONFIG & UI STYLE ---
+# ================================
+# CONFIG
+# ================================
 st.set_page_config(page_title="OceanData Pro Analytics", layout="wide")
 
 st.markdown("""
@@ -28,13 +29,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. SIDEBAR ---
+# ================================
+# SIDEBAR
+# ================================
 with st.sidebar:
-    st.markdown("<h2 style='color:#00d4ff; margin-bottom:0;'>🌊 OceanData</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color:#00d4ff;'>🌊 OceanData</h2>", unsafe_allow_html=True)
     st.caption("Platform Analisis Data Kelautan")
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    all_options = [
+
+    menu = [
         "🏠 Dashboard",
         "📂 Data Cleaning",
         "📈 Visualisasi",
@@ -42,72 +44,73 @@ with st.sidebar:
         "🌊 Analisis Pasut",
         "🍃 Windrose"
     ]
-    
-    st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
-    pilihan = st.radio("Navigasi", all_options, label_visibility="collapsed")
-    
-    st.markdown("---")
-    uploaded_file = st.file_uploader("Upload File CSV/Excel", type=["csv", "xlsx"])
 
-# --- 3. DATA ---
+    st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
+    pilihan = st.radio("Navigasi", menu, label_visibility="collapsed")
+
+    uploaded_file = st.file_uploader("Upload CSV/Excel", type=["csv", "xlsx"])
+
+# ================================
+# DATA
+# ================================
 if uploaded_file is not None:
 
-    df = pd.read_csv(uploaded_file, sep=None, engine='python')
+    df = pd.read_csv(uploaded_file, sep=None, engine="python")
 
-    if 'timestamp' in df.columns:
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-    cols_num = df.select_dtypes(include=[np.number]).columns.tolist()
+    cols_num = df.select_dtypes(include=np.number).columns.tolist()
 
-    target = st.sidebar.selectbox("Pilih Variabel Analisis:", cols_num)
+    target = st.sidebar.selectbox("Pilih Variabel Analisis", cols_num)
 
-    df_clean = df[['timestamp', target]].copy()
-    df_clean[target] = df_clean[target].interpolate(method='linear', limit_direction='both')
-    df_clean = df_clean.dropna()
-    df_clean.columns = ['time', 'raw']
+    df_clean = df[["timestamp", target]].dropna().copy()
+    df_clean[target] = df_clean[target].interpolate(limit_direction="both")
+    df_clean.columns = ["time", "raw"]
 
-# ================================
-# DASHBOARD
-# ================================
+    # ================================
+    # DASHBOARD
+    # ================================
     if pilihan == "🏠 Dashboard":
-        st.header(f"🏠 Dashboard: {target}")
+
+        st.header(f"Dashboard {target}")
         st.dataframe(df_clean.head(100), use_container_width=True)
 
-# ================================
-# DATA CLEANING
-# ================================
+    # ================================
+    # DATA CLEANING
+    # ================================
     elif pilihan == "📂 Data Cleaning":
-        st.header("📂 Preprocessing: Despiking")
 
-        thresh = st.slider("Threshold (Std Dev):", 1.0, 5.0, 3.0)
+        st.header("Preprocessing Despiking")
 
-        mean, std = df_clean['raw'].mean(), df_clean['raw'].std()
+        thresh = st.slider("Threshold Std Dev", 1.0, 5.0, 3.0)
 
-        df_cleaned = df_clean[
-            ((df_clean['raw'] - mean).abs() / std) <= thresh
-        ].copy()
+        mean = df_clean["raw"].mean()
+        std = df_clean["raw"].std()
 
-        st.line_chart(df_cleaned.set_index('time')['raw'])
+        df_despike = df_clean[
+            ((df_clean["raw"] - mean).abs() / std) <= thresh
+        ]
 
-# ================================
-# VISUALISASI
-# ================================
+        st.line_chart(df_despike.set_index("time")["raw"])
+
+    # ================================
+    # VISUALISASI
+    # ================================
     elif pilihan == "📈 Visualisasi":
 
-        st.header("📈 Analisis Deret Waktu (Time Series)")
+        st.header("Analisis Deret Waktu")
 
-        st.sidebar.markdown("### Setting Filter")
+        # CUT hanya jika water level
+        if "water" in target.lower() or "level" in target.lower() or "elevasi" in target.lower():
+            df_clean = df_clean[
+                (df_clean["raw"] >= 300) &
+                (df_clean["raw"] <= 400)
+            ]
 
         pilihan_jam = st.sidebar.selectbox(
-            "Pilih Jendela Waktu:",
-            [
-                "1 Jam",
-                "3 Jam",
-                "12 Jam",
-                "24 Jam",
-                "25 Jam (Eliminasi Pasut)",
-                "Custom"
-            ]
+            "Pilih Jendela Waktu",
+            ["1 Jam", "3 Jam", "12 Jam", "24 Jam", "25 Jam (Eliminasi Pasut)", "Custom"]
         )
 
         if pilihan_jam == "1 Jam":
@@ -121,102 +124,79 @@ if uploaded_file is not None:
         elif pilihan_jam == "25 Jam (Eliminasi Pasut)":
             window_size = 1500
         else:
-            window_size = st.sidebar.number_input(
-                "Masukkan Jumlah Poin:",
-                5,
-                5000,
-                60
-            )
+            window_size = st.sidebar.number_input("Masukkan poin", 5, 5000, 60)
 
-        t_raw, t_avg, t_ma, t_lp = st.tabs(
-            [
-                "📄 Data Raw",
-                "📊 Averaging",
-                "📈 Moving Average",
-                "📉 Low Pass"
-            ]
+        tab1, tab2, tab3, tab4 = st.tabs(
+            ["Data Raw", "Averaging", "Moving Average", "Low Pass"]
         )
 
-        with t_raw:
-
+        # RAW
+        with tab1:
             st.altair_chart(
                 alt.Chart(df_clean)
-                .mark_line(color='#00d4ff')
+                .mark_line(color="#00d4ff")
                 .encode(
-                    x='time:T',
-                    y=alt.Y('raw:Q', scale=alt.Scale(zero=False))
+                    x="time:T",
+                    y=alt.Y("raw:Q", scale=alt.Scale(zero=False))
                 )
                 .properties(height=450)
                 .interactive(),
                 use_container_width=True
             )
 
-        with t_avg:
+        # AVERAGE
+        with tab2:
 
             df_avg = df_clean.copy()
-            df_avg['filtered'] = df_avg['raw'].rolling(
-                window=window_size
-            ).mean()
+            df_avg["filtered"] = df_avg["raw"].rolling(window_size).mean()
 
             st.altair_chart(
-                alt.Chart(
-                    df_avg.melt('time', ['raw', 'filtered'])
-                )
+                alt.Chart(df_avg.melt("time"))
                 .mark_line()
                 .encode(
-                    x='time:T',
-                    y='value:Q',
-                    color='variable:N'
+                    x="time:T",
+                    y="value:Q",
+                    color="variable:N"
                 )
                 .properties(height=450)
                 .interactive(),
                 use_container_width=True
             )
 
-        with t_ma:
+        # MOVING
+        with tab3:
 
             df_ma = df_clean.copy()
-            df_ma['filtered'] = df_ma['raw'].rolling(
-                window=window_size,
-                center=True
-            ).mean()
+            df_ma["filtered"] = df_ma["raw"].rolling(window_size, center=True).mean()
 
             st.altair_chart(
-                alt.Chart(
-                    df_ma.melt('time', ['raw', 'filtered'])
-                )
+                alt.Chart(df_ma.melt("time"))
                 .mark_line()
                 .encode(
-                    x='time:T',
-                    y='value:Q',
-                    color='variable:N'
+                    x="time:T",
+                    y="value:Q",
+                    color="variable:N"
                 )
                 .properties(height=450)
                 .interactive(),
                 use_container_width=True
             )
 
-        with t_lp:
+        # LOWPASS
+        with tab4:
 
             try:
-                b, a = butter(4, 1/window_size, btype='low')
-
+                b, a = butter(4, 1/window_size, btype="low")
                 df_lp = df_clean.copy()
-                df_lp['filtered'] = filtfilt(
-                    b,
-                    a,
-                    df_lp['raw']
-                )
+                df_lp["filtered"] = filtfilt(b, a, df_lp["raw"])
 
                 st.altair_chart(
-                    alt.Chart(
-                        df_lp.melt('time', ['raw', 'filtered'])
-                    )
+                    alt.Chart(df_lp.melt("time"))
                     .mark_line()
                     .encode(
-                        x='time:T',
-                        y='value:Q',
-                        color='variable:N'
+                        x="time:T",
+                        y="value:Q",
+                        color="variable:N"
                     )
                     .properties(height=450)
                     .interactive(),
@@ -226,214 +206,158 @@ if uploaded_file is not None:
             except:
                 st.error("Window terlalu kecil")
 
-# ================================
-# SCATTER
-# ================================
+    # ================================
+    # SCATTER
+    # ================================
     elif pilihan == "🔍 Analisis Scatter":
 
-        st.header("🔍 Analisis Scatter Plot")
+        st.header("Scatter Plot")
 
-        st.info(
-            "💡 Pilih variabel X dan Y yang berbeda"
-        )
+        x = st.selectbox("Variabel X", cols_num)
+        y = st.selectbox("Variabel Y", cols_num)
 
-        col_x = st.selectbox("Pilih Variabel X", cols_num)
-        col_y = st.selectbox("Pilih Variabel Y", cols_num)
+        if x != y:
 
-        if col_x == col_y:
-            st.error("Variabel tidak boleh sama")
+            df_scatter = df[[x, y]].dropna()
+
+            chart = alt.Chart(df_scatter).mark_circle(size=60).encode(
+                x=x,
+                y=y,
+                tooltip=[x, y]
+            ).interactive().properties(height=500)
+
+            st.altair_chart(chart, use_container_width=True)
+
         else:
+            st.error("Variabel tidak boleh sama")
 
-            df_scatter = df[[col_x, col_y]].dropna()
-
-            chart = (
-                alt.Chart(df_scatter)
-                .mark_circle(size=60)
-                .encode(
-                    x=col_x,
-                    y=col_y,
-                    tooltip=[col_x, col_y]
-                )
-                .interactive()
-                .properties(height=500)
-            )
-
-            st.altair_chart(
-                chart,
-                use_container_width=True
-            )
-
-# ================================
-# ANALISIS PASUT
-# ================================
+    # ================================
+    # ANALISIS PASUT
+    # ================================
     elif pilihan == "🌊 Analisis Pasut":
 
-        st.header("🌊 Analisis Pasang Surut")
+        st.header("Analisis Pasang Surut")
 
-        if 'water_level' in df.columns:
+        if "water_level" in df.columns:
 
-            df_pasut = df[
-                ['timestamp', 'water_level']
-            ].dropna()
+            df_pasut = df[["timestamp", "water_level"]].dropna()
 
-            # CUT 300-400
             df_pasut = df_pasut[
-                (df_pasut['water_level'] >= 300) &
-                (df_pasut['water_level'] <= 400)
+                (df_pasut["water_level"] >= 300) &
+                (df_pasut["water_level"] <= 400)
             ]
 
-            time = df_pasut['timestamp'].values
-            elev = df_pasut['water_level'].values
+            time = pd.to_datetime(df_pasut["timestamp"]).to_pydatetime()
+            elev = df_pasut["water_level"].values
 
             st.subheader("Grafik Elevasi")
 
-            chart = (
-                alt.Chart(df_pasut)
-                .mark_line(color='#00d4ff')
-                .encode(
-                    x='timestamp:T',
-                    y=alt.Y(
-                        'water_level:Q',
-                        scale=alt.Scale(
-                            domain=[300, 400]
-                        )
-                    )
-                )
-                .properties(height=400)
-                .interactive()
+            st.line_chart(
+                df_pasut.set_index("timestamp")["water_level"]
             )
 
-            st.altair_chart(
-                chart,
-                use_container_width=True
-            )
+            st.subheader("UTide Harmonik")
 
-            st.subheader("Harmonik UTide")
+            coef = utide.solve(time, elev, lat=-6, method="ols", trend=False)
+            pred = utide.reconstruct(time, coef)
 
-            coef = utide.solve(
-                time,
-                elev,
-                lat=-6,
-                method='ols',
-                trend=False
-            )
+            df_utide = pd.DataFrame({
+                "time": df_pasut["timestamp"],
+                "Observasi": elev,
+                "Prediksi": pred.h
+            })
 
-            pred = utide.reconstruct(
-                time,
-                coef
-            )
+            st.line_chart(df_utide.set_index("time"))
 
-            df_utide = pd.DataFrame(
-                {
-                    "time": time,
-                    "Observasi": elev,
-                    "Prediksi": pred.h
-                }
-            )
+            st.subheader("Komponen Harmonik Utama")
 
-            chart2 = (
-                alt.Chart(
-                    df_utide.melt('time')
-                )
-                .mark_line()
-                .encode(
-                    x='time:T',
-                    y=alt.Y(
-                        'value:Q',
-                        scale=alt.Scale(
-                            domain=[300, 400]
-                        )
-                    ),
-                    color='variable:N'
-                )
-                .properties(height=400)
-                .interactive()
-            )
+            df_coef = pd.DataFrame({
+                "Komponen": coef.name,
+                "Amplitudo": coef.A,
+                "Fase": coef.g
+            })
 
-            st.altair_chart(
-                chart2,
-                use_container_width=True
-            )
+            utama = ["M2", "S2", "K1", "O1"]
+            df_utama = df_coef[df_coef["Komponen"].isin(utama)]
+
+            st.table(df_utama)
+
+            st.write("Jumlah komponen utama:", len(df_utama))
+
+            st.info("""
+Keterangan:
+
+Amplitudo = Besarnya pengaruh komponen pasut terhadap elevasi air laut  
+Fase = Waktu terjadinya puncak gelombang pasut  
+
+Formzahl tidak dapat dihitung karena panjang data tidak mencukupi
+""")
 
         else:
-            st.warning(
-                "Kolom water_level tidak ditemukan"
-            )
+            st.error("Kolom water_level tidak ditemukan")
 
-# ================================
-# WINDROSE
-# ================================
+    # ================================
+    # WINDROSE
+    # ================================
     elif pilihan == "🍃 Windrose":
 
         st.header("Windrose Angin")
 
-        if (
-            'wind_direction_avg' in df.columns and
-            'wind_speed_avg' in df.columns
-        ):
+        if "wind_direction_avg" in df.columns and "wind_speed_avg" in df.columns:
 
             df_wind = df[
-                [
-                    'wind_direction_avg',
-                    'wind_speed_avg'
-                ]
+                ["wind_direction_avg", "wind_speed_avg"]
             ].dropna()
 
-            bins = np.arange(0, 361, 22.5)
-
-            df_wind['dir_bin'] = pd.cut(
-                df_wind['wind_direction_avg'],
-                bins,
-                include_lowest=True
+            speed_bins = [0,1,2,3,4,5,10]
+            df_wind["speed_class"] = pd.cut(
+                df_wind["wind_speed_avg"],
+                speed_bins
             )
 
-            windrose = (
-                df_wind
-                .groupby('dir_bin')
-                ['wind_speed_avg']
-                .mean()
-                .reset_index()
+            dir_bins = np.arange(0,361,45)
+
+            df_wind["dir_bin"] = pd.cut(
+                df_wind["wind_direction_avg"],
+                dir_bins
             )
 
-            theta = bins[:-1]
+            windrose = df_wind.groupby(
+                ["dir_bin", "speed_class"]
+            ).size().reset_index(name="freq")
+
+            theta = windrose["dir_bin"].astype(str)
 
             fig = go.Figure()
 
-            fig.add_trace(
-                go.Barpolar(
-                    r=windrose['wind_speed_avg'],
-                    theta=theta,
-                    marker_color='#00d4ff'
+            for sp in windrose["speed_class"].unique():
+
+                subset = windrose[
+                    windrose["speed_class"] == sp
+                ]
+
+                fig.add_trace(
+                    go.Barpolar(
+                        r=subset["freq"],
+                        theta=subset["dir_bin"].astype(str),
+                        name=str(sp)
+                    )
                 )
-            )
 
             fig.update_layout(
                 template="plotly_dark",
                 polar=dict(
                     angularaxis=dict(
-                        tickvals=[
-                            0,45,90,135,
-                            180,225,270,315
-                        ],
-                        ticktext=[
-                            'N','NE','E','SE',
-                            'S','SW','W','NW'
-                        ],
-                        rotation=90,
-                        direction='clockwise'
+                        direction="clockwise",
+                        rotation=90
                     )
                 )
             )
 
-            st.plotly_chart(
-                fig,
-                use_container_width=True
-            )
+            st.plotly_chart(fig, use_container_width=True)
 
         else:
-            st.error(
-                "Kolom wind_direction_avg atau wind_speed_avg tidak ada"
-            )
+            st.error("Kolom wind tidak ditemukan")
 
 else:
-    st.info("👋 Upload file dulu ya")
+    st.info("Upload file dulu")
