@@ -117,11 +117,9 @@ if uploaded_file is not None:
 
         st.metric("Korelasi", round(df_scatter[x_var].corr(df_scatter[y_var]),3))
 
-    # =====================
     # PASUT (FINAL)
-    # =====================
     elif pilihan == "🌊 Analisis Pasut":
-        st.header("🌊 Modul: Analisis Pasang Surut")
+        st.header("🌊 Analisis Pasang Surut")
 
         if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
 
