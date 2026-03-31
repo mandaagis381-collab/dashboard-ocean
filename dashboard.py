@@ -118,36 +118,76 @@ if uploaded_file is not None:
         st.metric("Korelasi", round(df_scatter[x_var].corr(df_scatter[y_var]),3))
 
     # PASUT (FINAL)
-    elif pilihan == "🌊 Analisis Pasut":
-        st.header("🌊 Analisis Pasang Surut")
+    
+       elif pilihan == "🌊 Analisis Pasut":
+    st.header("🌊 Analisis Pasang Surut")
 
-        if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
+    if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
 
-            time = df_clean['time'].values
+        time = df_clean['time'].values
 
-            with st.spinner('Menghitung Harmonik...'):
-                coef = utide.solve(
-                    time,
-                    df_clean['raw'].values,
-                    lat=-6.0,
-                    method='ols',
-                    trend=False
-                )
+        with st.spinner('Menghitung Harmonik...'):
+            coef = utide.solve(
+                time,
+                df_clean['raw'].values,
+                lat=-6.0,
+                method='ols',
+                trend=False
+            )
 
-                predict = utide.reconstruct(time, coef)
+            predict = utide.reconstruct(time, coef)
 
-            df_pasut = df_clean.copy()
-            df_pasut['Prediksi'] = predict.h
+        df_pasut = df_clean.copy()
+        df_pasut['Prediksi'] = predict.h
 
-            # --- GRAFIK ---
-            st.subheader("Grafik Observasi vs Prediksi")
-            chart = alt.Chart(df_pasut.melt('time', ['raw', 'Prediksi'])).mark_line().encode(
-                x='time:T',
-                y=alt.Y('value:Q', scale=alt.Scale(zero=False)),
-                color=alt.Color('variable:N', scale=alt.Scale(range=['#00d4ff', '#ff4b4b']))
-            ).properties(height=400).interactive()
+        # ===== GRAFIK =====
+        st.subheader("Grafik Observasi vs Prediksi")
 
-            st.altair_chart(chart, use_container_width=True)
+        chart = alt.Chart(df_pasut.melt('time', ['raw', 'Prediksi'])).mark_line().encode(
+            x='time:T',
+            y=alt.Y('value:Q', title='Elevasi (cm)', scale=alt.Scale(zero=False)),
+            color=alt.Color('variable:N',
+                            title='Keterangan',
+                            scale=alt.Scale(range=['#00d4ff', '#ff4b4b']))
+        ).properties(height=400).interactive()
+
+        st.altair_chart(chart, use_container_width=True)
+
+        # ===== TABEL HARMONIK =====
+        st.subheader("Komponen Harmonik Utama")
+
+        df_harmonik = pd.DataFrame({
+            "Komponen": coef.name,
+            "Amplitudo (m)": np.round(coef.A, 3),
+            "Fase (°)": np.round(coef.g, 2)
+        })
+
+        komponen_penting = ["M2", "S2", "K1", "O1", "K2", "N2"]
+        df_harmonik = df_harmonik[df_harmonik["Komponen"].isin(komponen_penting)]
+
+        st.dataframe(df_harmonik, use_container_width=True)
+
+        # ===== FORMZAHL =====
+        st.subheader("Analisis Tipe Pasut (Formzahl)")
+        durasi_hari = (df_clean['time'].max() - df_clean['time'].min()).days
+
+        if durasi_hari >= 29:
+            try:
+                A = dict(zip(coef.name, coef.A))
+                F = (A.get('K1',0) + A.get('O1',0)) / (A.get('M2',1e-6) + A.get('S2',1e-6))
+
+                st.metric("Nilai Formzahl (F)", round(F, 3))
+
+                if F < 0.25:
+                    tipe = "Semi-diurnal"
+                elif F < 1.5:
+                    tipe = "Mixed condong semi-diurnal"
+                elif F < 3:
+                    tipe = "Mixed condong diurnal"
+                else:
+                    tipe = "Diurnal"
+
+                st.success(f"Tipe Pasut: {tipe}")
 
             # --- TABEL ---
             st.subheader("Komponen Harmonik Utama")
