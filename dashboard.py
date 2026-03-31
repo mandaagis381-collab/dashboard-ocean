@@ -33,7 +33,7 @@ with st.sidebar:
     st.caption("Platform Analisis Data Kelautan")
     st.markdown("<br>", unsafe_allow_html=True)
     
-    all_options = ["🏠 Dashboard", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose"]
+    all_options = ["🏠 Dashboard", "📊 Statistika Data", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose"]
     
     st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
     pilihan = st.radio("Navigasi", all_options, label_visibility="collapsed")
@@ -59,6 +59,22 @@ if uploaded_file is not None:
     if pilihan == "🏠 Dashboard":
         st.header(f"🏠 Dashboard: {target}")
         st.dataframe(df_clean.head(100), use_container_width=True)
+
+    # ===== TAMBAHAN STATISTIKA (TIDAK MENGUBAH YANG LAIN) =====
+    elif pilihan == "📊 Statistika Data":
+        st.header("📊 Statistika Data")
+
+        st.table(pd.DataFrame({
+            "Metric": ["Min", "Max", "Mean", "Standard Deviation", "Count"],
+            "Nilai": [
+                df_clean['raw'].min(),
+                df_clean['raw'].max(),
+                df_clean['raw'].mean(),
+                df_clean['raw'].std(),
+                df_clean['raw'].count()
+            ]
+        }))
+    # ==========================================================
 
     elif pilihan == "📂 Data Cleaning":
         st.header("📂 Preprocessing: Despiking")
@@ -98,7 +114,6 @@ if uploaded_file is not None:
 
         df_scatter = df[[x_var, y_var]].dropna()
 
-        # STYLE MENGIKUTI CONTOH (pakai plotly_dark + title)
         fig = px.scatter(
             df_scatter,
             x=x_var,
