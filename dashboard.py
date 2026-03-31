@@ -49,7 +49,7 @@ if uploaded_file is not None:
         st.dataframe(df.head(100), use_container_width=True)
 
 # =========================
-# VISUALISASI (SUDAH DI CUT)
+# VISUALISASI
 # =========================
     elif pilihan == "📈 Visualisasi":
 
@@ -105,7 +105,7 @@ if uploaded_file is not None:
             st.error("Variabel tidak boleh sama")
 
 # =========================
-# ANALISIS PASUT
+# ANALISIS PASUT (FINAL)
 # =========================
     elif pilihan == "🌊 Analisis Pasut":
 
@@ -120,19 +120,57 @@ if uploaded_file is not None:
                 (df_pasut['water_level'] <= 400)
             ]
 
-            time = df_pasut['timestamp'].values
-            elev = df_pasut['water_level'].values
+            df_pasut = df_pasut.sort_values("timestamp")
+
+            st.subheader("Filter Data")
+
+            metode = st.selectbox(
+                "Pilih metode",
+                ["Raw Data", "Average", "Moving Average", "Lowpass"]
+            )
+
+            pilihan_jam = st.selectbox(
+                "Window (jam)",
+                ["1 jam", "3 jam", "12 jam", "25 jam", "Custom"]
+            )
+
+            if pilihan_jam == "Custom":
+                jam = st.number_input("Masukkan jam", min_value=1, value=6)
+            else:
+                jam = int(pilihan_jam.split()[0])
+
+            df_filter = df_pasut.copy()
+
+            if metode == "Raw Data":
+                df_filter['filtered'] = df_filter['water_level']
+
+            elif metode == "Average":
+                df_filter = df_filter.set_index("timestamp")
+                df_filter['filtered'] = df_filter['water_level'].resample(f"{jam}H").mean()
+                df_filter = df_filter.reset_index()
+
+            elif metode == "Moving Average":
+                df_filter['filtered'] = df_filter['water_level'].rolling(window=jam, center=True).mean()
+
+            elif metode == "Lowpass":
+                df_filter['filtered'] = df_filter['water_level'].rolling(window=jam, center=True).mean()
 
             st.subheader("Time Series Elevasi")
 
-            chart = alt.Chart(df_pasut).mark_line(color='#00d4ff').encode(
+            df_plot = df_filter.dropna()
+
+            chart = alt.Chart(df_plot).mark_line().encode(
                 x='timestamp:T',
-                y=alt.Y('water_level:Q', scale=alt.Scale(domain=[300,400]))
+                y=alt.Y('filtered:Q', scale=alt.Scale(zero=False)),
+                tooltip=['timestamp','filtered']
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
 
             st.subheader("Harmonik UTide")
+
+            time = df_plot['timestamp'].values
+            elev = df_plot['filtered'].values
 
             coef = utide.solve(
                 time,
@@ -154,7 +192,7 @@ if uploaded_file is not None:
                 df_utide.melt('time')
             ).mark_line().encode(
                 x='time:T',
-                y=alt.Y('value:Q', scale=alt.Scale(domain=[300,400])),
+                y='value:Q',
                 color='variable:N'
             ).properties(height=400).interactive()
 
@@ -204,7 +242,7 @@ if uploaded_file is not None:
             st.error("Tidak ada water_level")
 
 # =========================
-# WINDROSE (YANG SUDAH DIUBAH)
+# WINDROSE (FINAL PARAMETER)
 # =========================
     elif pilihan == "🍃 Windrose":
 
