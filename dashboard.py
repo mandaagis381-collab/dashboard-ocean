@@ -60,21 +60,19 @@ if uploaded_file is not None:
         st.header(f"🏠 Dashboard: {target}")
         st.dataframe(df_clean.head(100), use_container_width=True)
 
-    # ===== TAMBAHAN STATISTIKA (TIDAK MENGUBAH YANG LAIN) =====
     elif pilihan == "📊 Statistika Data":
-        st.header("📊 Statistika Data")
+        st.header(f"📊 Statistika Data: {target}")
 
-        st.table(pd.DataFrame({
-            "Metric": ["Min", "Max", "Mean", "Standard Deviation", "Count"],
-            "Nilai": [
-                df_clean['raw'].min(),
-                df_clean['raw'].max(),
-                df_clean['raw'].mean(),
-                df_clean['raw'].std(),
-                df_clean['raw'].count()
-            ]
-        }))
-    # ==========================================================
+        data = df_clean['raw']
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Minimum", round(data.min(), 3))
+        col2.metric("Maximum", round(data.max(), 3))
+        col3.metric("Mean", round(data.mean(), 3))
+
+        col4, col5 = st.columns(2)
+        col4.metric("Standard Deviasi", round(data.std(), 3))
+        col5.metric("Jumlah Data", int(data.count()))
 
     elif pilihan == "📂 Data Cleaning":
         st.header("📂 Preprocessing: Despiking")
@@ -128,7 +126,7 @@ if uploaded_file is not None:
         st.metric("Koefisien Korelasi", round(corr, 3))
 
     elif pilihan == "🌊 Analisis Pasut":
-        st.header("🌊 Modul: Analisis Pasang Surut")
+        st.header("🌊 Analisis Pasang Surut")
 
         if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
 
@@ -158,7 +156,7 @@ if uploaded_file is not None:
             st.altair_chart(chart, use_container_width=True)
 
     elif pilihan == "🍃 Windrose":
-        st.header(f"🍃 Modul: Windrose ({target})")
+        st.header(f"🍃 Windrose ({target})")
 
         if "wind" in target.lower():
             if "speed" in target.lower():
