@@ -86,31 +86,30 @@ if uploaded_file is not None:
                 x='time:T',
                 y=alt.Y('raw:Q', scale=alt.Scale(zero=False))
             ).properties(height=450).interactive(), use_container_width=True)
-        
-        with t_avg:
-            df_avg = df_clean.copy()
-            df_avg['filtered'] = df_avg['raw'].rolling(window=window_size).mean()
-            st.altair_chart(alt.Chart(df_avg.melt('time', ['raw', 'filtered'])).mark_line().encode(
-                x='time:T', y='value:Q', color='variable:N'
-            ).properties(height=450).interactive(), use_container_width=True)
 
-        with t_ma:
-            df_ma = df_clean.copy()
-            df_ma['filtered'] = df_ma['raw'].rolling(window=window_size, center=True).mean()
-            st.altair_chart(alt.Chart(df_ma.melt('time', ['raw', 'filtered'])).mark_line().encode(
-                x='time:T', y='value:Q', color='variable:N'
-            ).properties(height=450).interactive(), use_container_width=True)
+    elif pilihan == "🔍 Analisis Scatter":
+        st.header("🔍 Analisis Scatter")
 
-        with t_lp:
-            try:
-                b, a = butter(4, 1/window_size, btype='low')
-                df_lp = df_clean.copy()
-                df_lp['filtered'] = filtfilt(b, a, df_lp['raw'])
-                st.altair_chart(alt.Chart(df_lp.melt('time', ['raw', 'filtered'])).mark_line().encode(
-                    x='time:T', y='value:Q', color='variable:N'
-                ).properties(height=450).interactive(), use_container_width=True)
-            except:
-                st.error("Window terlalu kecil.")
+        cols = df.select_dtypes(include=[np.number]).columns.tolist()
+
+        col1, col2 = st.columns(2)
+        x_var = col1.selectbox("Pilih Variabel X:", cols, index=0)
+        y_var = col2.selectbox("Pilih Variabel Y:", cols, index=1 if len(cols) > 1 else 0)
+
+        df_scatter = df[[x_var, y_var]].dropna()
+
+        fig = px.scatter(
+            df_scatter,
+            x=x_var,
+            y=y_var,
+            template="plotly_dark",
+            title=f"Scatter Plot: {x_var} vs {y_var}"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        corr = df_scatter[x_var].corr(df_scatter[y_var])
+        st.metric("Koefisien Korelasi", round(corr, 3))
 
     elif pilihan == "🌊 Analisis Pasut":
         st.header("🌊 Analisis Pasang Surut")
@@ -119,12 +118,13 @@ if uploaded_file is not None:
 
             data = df_clean['raw'].copy()
 
-            # FIX 1: cm → meter
             if data.max() > 50:
                 data = data / 100
 
-            # FIX 2: hilangkan offset
-            data = data - data.mean()
+            # detrend + no negative
+            trend = np.polyfit(range(len(data)), data, 1)
+            data_detrended = data - np.polyval(trend, range(len(data)))
+            data = data_detrended - data_detrended.min()
 
             time = df_clean['time'].values
 
@@ -153,40 +153,6 @@ if uploaded_file is not None:
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
-
-            st.subheader("Konstanta Harmonik Utama")
-
-            df_coef = pd.DataFrame({
-                "Komponen": coef.name,
-                "Amplitudo": coef.A,
-                "Fase": coef.g
-            })
-
-            utama = ['M2', 'S2', 'K1', 'O1']
-            df_utama = df_coef[df_coef['Komponen'].isin(utama)].reset_index(drop=True)
-
-            col1, col2 = st.columns(2)
-            col1.table(df_utama)
-
-            try:
-                amps = dict(zip(df_utama['Komponen'], df_utama['Amplitudo']))
-                F = (amps['K1'] + amps['O1']) / (amps['M2'] + amps['S2'])
-
-                col2.metric("Bilangan Formzahl (F)", round(F, 3))
-
-                if F <= 0.25:
-                    tipe = "Harian Ganda (Semidiurnal)"
-                elif F <= 1.5:
-                    tipe = "Campuran Dominan Ganda"
-                elif F <= 3.0:
-                    tipe = "Campuran Dominan Tunggal"
-                else:
-                    tipe = "Harian Tunggal (Diurnal)"
-
-                col2.success(f"Tipe Pasut: {tipe}")
-
-            except:
-                col2.info("Data kurang panjang untuk hitung Formzahl")
 
         else:
             st.warning("⚠️ Pilih data Water Level")
