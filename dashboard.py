@@ -49,7 +49,7 @@ if uploaded_file is not None:
         st.dataframe(df.head(100), use_container_width=True)
 
 # =========================
-# VISUALISASI
+# VISUALISASI (ADA FILTER)
 # =========================
     elif pilihan == "📈 Visualisasi":
 
@@ -57,6 +57,7 @@ if uploaded_file is not None:
 
         df_plot = df[['timestamp', target]].dropna()
 
+        # REMOVE OUTLIER
         Q1 = df_plot[target].quantile(0.25)
         Q3 = df_plot[target].quantile(0.75)
         IQR = Q3 - Q1
@@ -66,9 +67,44 @@ if uploaded_file is not None:
             (df_plot[target] <= Q3 + 1.5*IQR)
         ]
 
-        chart = alt.Chart(df_plot).mark_line(color='#00d4ff').encode(
+        st.subheader("Filter Waktu")
+
+        metode = st.selectbox(
+            "Metode",
+            ["Raw Data", "Average", "Moving Average", "Lowpass"]
+        )
+
+        pilihan_jam = st.selectbox(
+            "Window (jam)",
+            ["1 jam", "3 jam", "12 jam", "25 jam", "Custom"]
+        )
+
+        if pilihan_jam == "Custom":
+            jam = st.number_input("Masukkan jam", min_value=1, value=6)
+        else:
+            jam = int(pilihan_jam.split()[0])
+
+        df_filter = df_plot.copy()
+
+        if metode == "Raw Data":
+            df_filter['filtered'] = df_filter[target]
+
+        elif metode == "Average":
+            df_filter = df_filter.set_index("timestamp")
+            df_filter['filtered'] = df_filter[target].resample(f"{jam}H").mean()
+            df_filter = df_filter.reset_index()
+
+        elif metode == "Moving Average":
+            df_filter['filtered'] = df_filter[target].rolling(window=jam, center=True).mean()
+
+        elif metode == "Lowpass":
+            df_filter['filtered'] = df_filter[target].rolling(window=jam, center=True).mean()
+
+        df_filter = df_filter.dropna()
+
+        chart = alt.Chart(df_filter).mark_line(color='#00d4ff').encode(
             x='timestamp:T',
-            y=alt.Y(f'{target}:Q', scale=alt.Scale(zero=False))
+            y=alt.Y('filtered:Q', scale=alt.Scale(zero=False))
         ).properties(height=450).interactive()
 
         st.altair_chart(chart, use_container_width=True)
@@ -105,7 +141,7 @@ if uploaded_file is not None:
             st.error("Variabel tidak boleh sama")
 
 # =========================
-# ANALISIS PASUT (FINAL)
+# ANALISIS PASUT (PAKAI FILTER)
 # =========================
     elif pilihan == "🌊 Analisis Pasut":
 
@@ -155,14 +191,13 @@ if uploaded_file is not None:
             elif metode == "Lowpass":
                 df_filter['filtered'] = df_filter['water_level'].rolling(window=jam, center=True).mean()
 
-            st.subheader("Time Series Elevasi")
-
             df_plot = df_filter.dropna()
 
-            chart = alt.Chart(df_plot).mark_line().encode(
+            st.subheader("Time Series Elevasi")
+
+            chart = alt.Chart(df_plot).mark_line(color='#00d4ff').encode(
                 x='timestamp:T',
-                y=alt.Y('filtered:Q', scale=alt.Scale(zero=False)),
-                tooltip=['timestamp','filtered']
+                y=alt.Y('filtered:Q', scale=alt.Scale(zero=False))
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
@@ -242,7 +277,7 @@ if uploaded_file is not None:
             st.error("Tidak ada water_level")
 
 # =========================
-# WINDROSE (FINAL PARAMETER)
+# WINDROSE
 # =========================
     elif pilihan == "🍃 Windrose":
 
