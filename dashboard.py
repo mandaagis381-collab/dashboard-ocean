@@ -24,6 +24,7 @@ with st.sidebar:
 
     menu = [
         "🏠 Dashboard",
+        "📂 Data Cleaning",   # ✅ TAMBAHAN
         "📈 Visualisasi",
         "🔍 Scatter",
         "🌊 Analisis Pasut",
@@ -49,7 +50,42 @@ if uploaded_file is not None:
         st.dataframe(df.head(100), use_container_width=True)
 
 # =========================
-# VISUALISASI (ADA FILTER)
+# DATA CLEANING (BARU)
+# =========================
+    elif pilihan == "📂 Data Cleaning":
+
+        st.header("Data Cleaning")
+
+        target = st.selectbox("Pilih Variabel", cols_num)
+
+        df_clean = df[['timestamp', target]].copy()
+
+        # INTERPOLATE
+        df_clean[target] = df_clean[target].interpolate(method='linear', limit_direction='both')
+
+        # DESPIKING
+        thresh = st.slider("Threshold (Std Dev)", 1.0, 5.0, 3.0)
+
+        mean = df_clean[target].mean()
+        std = df_clean[target].std()
+
+        df_cleaned = df_clean[
+            ((df_clean[target] - mean).abs() / std) <= thresh
+        ]
+
+        st.subheader("Hasil Cleaning")
+
+        chart = alt.Chart(df_cleaned).mark_line(color='#00d4ff').encode(
+            x='timestamp:T',
+            y=alt.Y(f'{target}:Q', scale=alt.Scale(zero=False))
+        ).properties(height=450).interactive()
+
+        st.altair_chart(chart, use_container_width=True)
+
+        st.caption("Metode: Interpolasi + Despiking (Std Dev)")
+
+# =========================
+# VISUALISASI
 # =========================
     elif pilihan == "📈 Visualisasi":
 
@@ -57,7 +93,6 @@ if uploaded_file is not None:
 
         df_plot = df[['timestamp', target]].dropna()
 
-        # REMOVE OUTLIER
         Q1 = df_plot[target].quantile(0.25)
         Q3 = df_plot[target].quantile(0.75)
         IQR = Q3 - Q1
@@ -141,7 +176,7 @@ if uploaded_file is not None:
             st.error("Variabel tidak boleh sama")
 
 # =========================
-# ANALISIS PASUT (PAKAI FILTER)
+# ANALISIS PASUT
 # =========================
     elif pilihan == "🌊 Analisis Pasut":
 
@@ -151,70 +186,12 @@ if uploaded_file is not None:
 
             df_pasut = df[['timestamp','water_level']].dropna()
 
-            df_pasut = df_pasut[
-                (df_pasut['water_level'] >= 300) &
-                (df_pasut['water_level'] <= 400)
-            ]
-
             df_pasut = df_pasut.sort_values("timestamp")
 
-            st.subheader("Filter Data")
+            time = df_pasut['timestamp'].values
+            elev = df_pasut['water_level'].values
 
-            metode = st.selectbox(
-                "Pilih metode",
-                ["Raw Data", "Average", "Moving Average", "Lowpass"]
-            )
-
-            pilihan_jam = st.selectbox(
-                "Window (jam)",
-                ["1 jam", "3 jam", "12 jam", "25 jam", "Custom"]
-            )
-
-            if pilihan_jam == "Custom":
-                jam = st.number_input("Masukkan jam", min_value=1, value=6)
-            else:
-                jam = int(pilihan_jam.split()[0])
-
-            df_filter = df_pasut.copy()
-
-            if metode == "Raw Data":
-                df_filter['filtered'] = df_filter['water_level']
-
-            elif metode == "Average":
-                df_filter = df_filter.set_index("timestamp")
-                df_filter['filtered'] = df_filter['water_level'].resample(f"{jam}H").mean()
-                df_filter = df_filter.reset_index()
-
-            elif metode == "Moving Average":
-                df_filter['filtered'] = df_filter['water_level'].rolling(window=jam, center=True).mean()
-
-            elif metode == "Lowpass":
-                df_filter['filtered'] = df_filter['water_level'].rolling(window=jam, center=True).mean()
-
-            df_plot = df_filter.dropna()
-
-            st.subheader("Time Series Elevasi")
-
-            chart = alt.Chart(df_plot).mark_line(color='#00d4ff').encode(
-                x='timestamp:T',
-                y=alt.Y('filtered:Q', scale=alt.Scale(zero=False))
-            ).properties(height=400).interactive()
-
-            st.altair_chart(chart, use_container_width=True)
-
-            st.subheader("Harmonik UTide")
-
-            time = df_plot['timestamp'].values
-            elev = df_plot['filtered'].values
-
-            coef = utide.solve(
-                time,
-                elev,
-                lat=-6,
-                method='ols',
-                trend=False
-            )
-
+            coef = utide.solve(time, elev, lat=-6, method='ols', trend=False)
             pred = utide.reconstruct(time, coef)
 
             df_utide = pd.DataFrame({
@@ -223,7 +200,7 @@ if uploaded_file is not None:
                 "Prediksi": pred.h
             })
 
-            chart2 = alt.Chart(
+            chart = alt.Chart(
                 df_utide.melt('time')
             ).mark_line().encode(
                 x='time:T',
@@ -231,47 +208,7 @@ if uploaded_file is not None:
                 color='variable:N'
             ).properties(height=400).interactive()
 
-            st.altair_chart(chart2, use_container_width=True)
-
-            st.subheader("Konstanta Harmonik")
-
-            df_coef = pd.DataFrame({
-                "Komponen": coef.name,
-                "Amplitudo": coef.A,
-                "Fase": coef.g
-            })
-
-            utama = ['M2','S2','K1','O1']
-            df_utama = df_coef[df_coef['Komponen'].isin(utama)]
-
-            st.table(df_utama)
-
-            try:
-                M2 = df_utama[df_utama['Komponen']=='M2']['Amplitudo'].values[0]
-                S2 = df_utama[df_utama['Komponen']=='S2']['Amplitudo'].values[0]
-                K1 = df_utama[df_utama['Komponen']=='K1']['Amplitudo'].values[0]
-                O1 = df_utama[df_utama['Komponen']=='O1']['Amplitudo'].values[0]
-
-                F = (K1 + O1) / (M2 + S2)
-
-                st.subheader("Formzahl")
-                st.write(f"F = {F:.3f}")
-
-                if F < 0.25:
-                    tipe = "Semi-diurnal"
-                elif F < 1.5:
-                    tipe = "Campuran condong semi-diurnal"
-                elif F < 3:
-                    tipe = "Campuran condong diurnal"
-                else:
-                    tipe = "Diurnal"
-
-                st.success(f"Tipe: {tipe}")
-
-            except:
-                st.warning("Komponen tidak lengkap")
-
-            st.info("Formzahl belum optimal karena panjang data pendek")
+            st.altair_chart(chart, use_container_width=True)
 
         else:
             st.error("Tidak ada water_level")
@@ -289,8 +226,8 @@ if uploaded_file is not None:
 
             st.info("Pilih yang wind ya")
 
-            col_dir = st.selectbox("Pilih arah angin (direction)", wind_cols)
-            col_spd = st.selectbox("Pilih kecepatan angin (speed)", wind_cols)
+            col_dir = st.selectbox("Pilih arah angin", wind_cols)
+            col_spd = st.selectbox("Pilih kecepatan angin", wind_cols)
 
             if col_dir != col_spd:
 
@@ -321,10 +258,7 @@ if uploaded_file is not None:
                 fig.update_layout(
                     template="plotly_dark",
                     polar=dict(
-                        angularaxis=dict(
-                            rotation=90,
-                            direction='clockwise'
-                        )
+                        angularaxis=dict(rotation=90, direction='clockwise')
                     )
                 )
 
