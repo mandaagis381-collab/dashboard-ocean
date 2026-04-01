@@ -145,7 +145,7 @@ if uploaded_file is not None:
             except:
                 st.error("Window terlalu kecil.")
 
-    # PASUT (FIXED INDENT)
+    # PASUT
     elif pilihan == "🌊 Analisis Pasut":
         st.header("🌊 Analisis Pasang Surut")
 
@@ -199,19 +199,18 @@ if uploaded_file is not None:
 
         else:
             st.error("Pilih variabel elevasi/water level")
-    
-      elif pilihan == "🍃 Windrose":
+
+    # WINDROSE (FIXED)
+    elif pilihan == "🍃 Windrose":
         st.header(f"🍃 Modul: Windrose ({target})")
         
-        # Logika Universal untuk semua variabel Wind yang ada di gambar Dea
         if "wind" in target.lower():
-            # 1. Tentukan kolom arah
+            
             if "speed" in target.lower():
                 direction_col = 'wind_direction_avg'
                 df_rose = df[[target, direction_col]].copy()
                 df_rose['dir_bin'] = (np.round(df_rose[direction_col] / 22.5) * 22.5) % 360
                 
-                # klasifikasi speed
                 min_v, max_v = df_rose[target].min(), df_rose[target].max()
                 bins = np.linspace(min_v, max_v, 6)
                 labels = [f"{round(bins[i],1)}-{round(bins[i+1],1)}" for i in range(5)]
@@ -228,7 +227,7 @@ if uploaded_file is not None:
                     title=f"Windrose Kecepatan: {target}"
                 )
             
-            else:  # direction
+            else:
                 df_rose = df[[target]].copy()
                 df_rose['dir_bin'] = (np.round(df_rose[target] / 22.5) * 22.5) % 360
                 counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
@@ -241,7 +240,6 @@ if uploaded_file is not None:
                     title=f"Distribusi Frekuensi Arah: {target}"
                 )
 
-            # ✅ TAMBAHAN SIMBOL ARAH ANGIN
             fig.update_layout(
                 polar=dict(
                     angularaxis=dict(
@@ -261,4 +259,3 @@ if uploaded_file is not None:
 
 else:
     st.info("👋 Silahkan upload data dulu")
-
