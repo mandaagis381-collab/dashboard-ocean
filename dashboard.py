@@ -145,91 +145,66 @@ if uploaded_file is not None:
             except:
                 st.error("Window terlalu kecil.")
 
- # PASUT
-elif pilihan == "🌊 Analisis Pasut":
-    st.header("🌊 Analisis Pasang Surut")
+    # PASUT (FIXED INDENT)
+    elif pilihan == "🌊 Analisis Pasut":
+        st.header("🌊 Analisis Pasang Surut")
 
-    if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
-        time = df_clean['time'].values
-        raw_data = df_clean['raw'].values
-        
-        with st.spinner('Menghitung Harmonik...'):
-            coef = utide.solve(time, raw_data, lat=-6.0, method='ols', trend=False)
-            predict = utide.reconstruct(time, coef)
+        if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
+            time = df_clean['time'].values
+            raw_data = df_clean['raw'].values
+            
+            with st.spinner('Menghitung Harmonik...'):
+                coef = utide.solve(time, raw_data, lat=-6.0, method='ols', trend=False)
+                predict = utide.reconstruct(time, coef)
 
-        df_plot_pasut = pd.DataFrame({
-            "time": time,
-            "Observasi": raw_data / 100,
-            "Prediksi": predict.h / 100
-        })
+            df_plot_pasut = pd.DataFrame({
+                "time": time,
+                "Observasi": raw_data / 100,
+                "Prediksi": predict.h / 100
+            })
 
-        st.subheader("Grafik Observasi vs Prediksi")
-        chart = alt.Chart(df_plot_pasut.melt('time', ['Observasi', 'Prediksi'])).mark_line().encode(
-            x='time:T',
-            y=alt.Y('value:Q', title='Elevasi (m)', scale=alt.Scale(domain=[3.0, 4.0], clamp=True)),
-            color=alt.Color('variable:N', scale=alt.Scale(range=['#00d4ff', '#ff4b4b']))
-        ).properties(height=400).interactive()
+            st.subheader("Grafik Observasi vs Prediksi")
+            chart = alt.Chart(df_plot_pasut.melt('time', ['Observasi', 'Prediksi'])).mark_line().encode(
+                x='time:T',
+                y=alt.Y('value:Q', title='Elevasi (m)', scale=alt.Scale(domain=[3.0, 4.0], clamp=True)),
+                color=alt.Color('variable:N', scale=alt.Scale(range=['#00d4ff', '#ff4b4b']))
+            ).properties(height=400).interactive()
 
-        st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart, use_container_width=True)
 
-        # =========================
-        # KETERANGAN
-        # =========================
-        st.subheader("Keterangan")
-        st.markdown("""
-        - **Amplitudo**: menunjukkan tinggi gelombang pasut dari titik tengah (mean sea level).
-        - **Fase**: menunjukkan waktu terjadinya puncak gelombang (derajat fase).
-        """)
+            st.subheader("Keterangan")
+            st.markdown("""
+            - **Amplitudo**: tinggi gelombang dari mean sea level  
+            - **Fase**: waktu terjadinya puncak gelombang  
+            """)
 
-        # =========================
-        # TABEL HARMONIK
-        # =========================
-        st.subheader("Komponen Harmonik Utama")
+            st.subheader("Komponen Harmonik Utama")
+            df_harmonik = pd.DataFrame({
+                "Komponen": coef.name,
+                "Amplitudo (m)": np.round(coef.A / 100, 3),
+                "Fase (°)": np.round(coef.g, 2)
+            })
 
-        df_harmonik = pd.DataFrame({
-            "Komponen": coef.name,
-            "Amplitudo (m)": np.round(coef.A / 100, 3),
-            "Fase (°)": np.round(coef.g, 2)
-        })
+            komponen_penting = ["M2", "S2", "K1", "O1", "K2", "N2", "M1"]
+            df_harmonik = df_harmonik[df_harmonik["Komponen"].isin(komponen_penting)]
 
-        # komponen penting (ditambahin sesuai request kamu)
-        komponen_penting = ["M2", "S2", "K1", "O1", "K2", "N2", "M1"]
-        df_harmonik = df_harmonik[df_harmonik["Komponen"].isin(komponen_penting)]
+            st.dataframe(df_harmonik, use_container_width=True)
 
-        st.dataframe(df_harmonik, use_container_width=True)
+            st.subheader("Analisis Tipe Pasut (Formzahl)")
+            durasi_hari = (df_clean['time'].max() - df_clean['time'].min()).days
 
-        # =========================
-        # FORMZAHL
-        # =========================
-        st.subheader("Analisis Tipe Pasut (Formzahl)")
-
-        durasi_hari = (df_clean['time'].max() - df_clean['time'].min()).days
-
-        if durasi_hari >= 29:
-            try:
-                A = dict(zip(coef.name, coef.A))
-                F = (A.get('K1', 0) + A.get('O1', 0)) / (A.get('M2', 1e-6) + A.get('S2', 1e-6))
-
-                st.metric("Nilai Formzahl (F)", round(F, 3))
-
-                if F < 0.25:
-                    tipe = "Semi-diurnal"
-                elif F < 1.5:
-                    tipe = "Mixed condong semi-diurnal"
-                elif F < 3:
-                    tipe = "Mixed condong diurnal"
-                else:
-                    tipe = "Diurnal"
-
-                st.success(f"Tipe Pasut: {tipe}")
-
-            except:
-                st.warning("Perhitungan Formzahl gagal")
+            if durasi_hari >= 29:
+                try:
+                    A = dict(zip(coef.name, coef.A))
+                    F = (A.get('K1', 0) + A.get('O1', 0)) / (A.get('M2', 1e-6) + A.get('S2', 1e-6))
+                    st.metric("Nilai Formzahl (F)", round(F, 3))
+                except:
+                    st.warning("Perhitungan Formzahl gagal")
+            else:
+                st.warning("⚠️ Formzahl tidak dapat dihitung karena data terlalu pendek")
 
         else:
-            st.warning("⚠️ Formzahl tidak dapat dihitung karena panjang data terlalu pendek (< 29 hari)")
+            st.error("Pilih variabel elevasi/water level")
 
-    else:
-        st.error("Pilih variabel elevasi/water level")
 else:
     st.info("👋 Silahkan upload data dulu")
