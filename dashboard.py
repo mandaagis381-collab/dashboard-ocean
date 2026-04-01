@@ -82,7 +82,7 @@ if uploaded_file is not None:
         st.line_chart(df_cleaned.set_index('time')['raw'])
 
     # VISUALISASI
-   elif pilihan == "📈 Visualisasi":
+       elif pilihan == "📈 Visualisasi":
         st.header("📈 Analisis Deret Waktu (Time Series)")
         st.sidebar.markdown("### Setting Filter")
         pilihan_jam = st.sidebar.selectbox("Pilih Jendela Waktu:", ["1 Jam", "3 Jam", "12 Jam", "24 Jam", "25 Jam (Eliminasi Pasut)", "Custom"])
