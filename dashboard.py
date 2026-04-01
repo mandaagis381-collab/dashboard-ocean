@@ -200,31 +200,64 @@ if uploaded_file is not None:
         else:
             st.error("Pilih variabel elevasi/water level")
     
-        # WINDROSE
-    elif pilihan == "🍃 Windrose":
-        st.header(f"🍃 Windrose ({target})")
-
+     elif pilihan == "🍃 Windrose":
+        st.header(f"🍃 Modul: Windrose ({target})")
+        
+        # Logika Universal untuk semua variabel Wind yang ada di gambar Dea
         if "wind" in target.lower():
-            df_rose = df[[target]].dropna()
-            df_rose['dir_bin'] = (np.round(df_rose[target] / 22.5) * 22.5) % 360
-            counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
+            # 1. Tentukan kolom arah
+            if "speed" in target.lower():
+                direction_col = 'wind_direction_avg'
+                df_rose = df[[target, direction_col]].copy()
+                df_rose['dir_bin'] = (np.round(df_rose[direction_col] / 22.5) * 22.5) % 360
+                
+                # klasifikasi speed
+                min_v, max_v = df_rose[target].min(), df_rose[target].max()
+                bins = np.linspace(min_v, max_v, 6)
+                labels = [f"{round(bins[i],1)}-{round(bins[i+1],1)}" for i in range(5)]
+                df_rose['range'] = pd.cut(df_rose[target], bins=bins, labels=labels, include_lowest=True)
+                
+                counts = df_rose.groupby(['dir_bin', 'range']).size().reset_index(name='count')
 
-            fig = px.bar_polar(counts, r="count", theta="dir_bin", template="plotly_dark")
+                fig = px.bar_polar(
+                    counts,
+                    r="count",
+                    theta="dir_bin",
+                    color="range",
+                    template="plotly_dark",
+                    title=f"Windrose Kecepatan: {target}"
+                )
+            
+            else:  # direction
+                df_rose = df[[target]].copy()
+                df_rose['dir_bin'] = (np.round(df_rose[target] / 22.5) * 22.5) % 360
+                counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
 
+                fig = px.bar_polar(
+                    counts,
+                    r="count",
+                    theta="dir_bin",
+                    template="plotly_dark",
+                    title=f"Distribusi Frekuensi Arah: {target}"
+                )
+
+            # ✅ TAMBAHAN SIMBOL ARAH ANGIN
             fig.update_layout(
                 polar=dict(
                     angularaxis=dict(
                         rotation=90,
                         direction='clockwise',
-                        tickvals=[0,90,180,270],
-                        ticktext=['N','E','S','W']
+                        tickvals=[0,45,90,135,180,225,270,315],
+                        ticktext=['N','NE','E','SE','S','SW','W','NW']
                     )
                 )
             )
 
             st.plotly_chart(fig, use_container_width=True)
+            st.info(f"💡 Menampilkan data Windrose berdasarkan variabel: *{target}*")
+
         else:
-            st.error("Pilih variabel wind")
+            st.error("Pilih variabel wind.")
 
 else:
     st.info("👋 Silahkan upload data dulu")
