@@ -172,12 +172,6 @@ if uploaded_file is not None:
 
             st.altair_chart(chart, use_container_width=True)
 
-            st.subheader("Keterangan")
-            st.markdown("""
-            - **Amplitudo**: tinggi gelombang dari mean sea level  
-            - **Fase**: waktu terjadinya puncak gelombang  
-            """)
-
             st.subheader("Komponen Harmonik Utama")
             df_harmonik = pd.DataFrame({
                 "Komponen": coef.name,
@@ -205,6 +199,33 @@ if uploaded_file is not None:
 
         else:
             st.error("Pilih variabel elevasi/water level")
+    
+    # WINDROSE
+    elif pilihan == "🍃 Windrose":
+        st.header(f"🍃 Windrose ({target})")
+
+        if "wind" in target.lower():
+            df_rose = df[[target]].dropna()
+            df_rose['dir_bin'] = (np.round(df_rose[target] / 22.5) * 22.5) % 360
+            counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
+
+            fig = px.bar_polar(counts, r="count", theta="dir_bin", template="plotly_dark")
+
+            fig.update_layout(
+                polar=dict(
+                    angularaxis=dict(
+                        rotation=90,
+                        direction='clockwise',
+                        tickvals=[0, 90, 180, 270],
+                        ticktext=['N', 'E', 'S', 'W']
+                    )
+                )
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        else:
+            st.error("Pilih variabel wind")
 
 else:
     st.info("👋 Silahkan upload data dulu")
