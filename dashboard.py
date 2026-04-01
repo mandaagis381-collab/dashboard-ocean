@@ -32,7 +32,7 @@ with st.sidebar:
     st.markdown("<h2 style='color:#00d4ff; margin-bottom:0;'>🌊 OceanData</h2>", unsafe_allow_html=True)
     st.caption("Platform Analisis Data Kelautan")
     
-    all_options = ["🏠 Dashboard", "📊 Statistika Data", "📂 Data Cleaning", "📈 Visualisasi", "🔍 Analisis Scatter", "🌊 Analisis Pasut", "🍃 Windrose"]
+    all_options = ["🏠 Dashboard", "📊 Statistika Data", "📂 Data Cleaning", "📈 Visualisasi", "🔍, "🌊 Analisis Pasut", "🍃 Windrose"]
     
     st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
     pilihan = st.radio("Navigasi", all_options, label_visibility="collapsed")
@@ -145,82 +145,91 @@ if uploaded_file is not None:
             except:
                 st.error("Window terlalu kecil.")
 
-    # SCATTER
-    elif pilihan == "🔍 Analisis Scatter":
-        st.header("🔍 Analisis Scatter (Korelasi)")
+ # PASUT
+elif pilihan == "🌊 Analisis Pasut":
+    st.header("🌊 Analisis Pasang Surut")
 
-        cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
+        time = df_clean['time'].values
+        raw_data = df_clean['raw'].values
         
-        col1, col2 = st.columns(2)
-        with col1:
-            x_var = st.selectbox("Pilih Variabel X", cols)
-        with col2:
-            y_var = st.selectbox("Pilih Variabel Y", cols, index=1 if len(cols) > 1 else 0)
+        with st.spinner('Menghitung Harmonik...'):
+            coef = utide.solve(time, raw_data, lat=-6.0, method='ols', trend=False)
+            predict = utide.reconstruct(time, coef)
 
-        # Ambil data dan hapus baris yang kosong (NaN)
-        df_scatter = df[[x_var, y_var]].dropna()
+        df_plot_pasut = pd.DataFrame({
+            "time": time,
+            "Observasi": raw_data / 100,
+            "Prediksi": predict.h / 100
+        })
 
-        # Membuat Scatter Plot menggunakan Plotly Express
-        fig = px.scatter(
-            df_scatter, 
-            x=x_var, 
-            y=y_var, 
-            template="plotly_dark",
-            opacity=0.5,           # Membuat titik agak transparan agar tumpukan data terlihat
-            trendline="ols",       # Menambahkan garis tren regresi linear
-            trendline_color_override="#ff4b4b", # Warna garis tren (merah)
-            title=f"Hubungan antara {x_var} dan {y_var}"
-        )
+        st.subheader("Grafik Observasi vs Prediksi")
+        chart = alt.Chart(df_plot_pasut.melt('time', ['Observasi', 'Prediksi'])).mark_line().encode(
+            x='time:T',
+            y=alt.Y('value:Q', title='Elevasi (m)', scale=alt.Scale(domain=[3.0, 4.0], clamp=True)),
+            color=alt.Color('variable:N', scale=alt.Scale(range=['#00d4ff', '#ff4b4b']))
+        ).properties(height=400).interactive()
 
-        # Menyesuaikan tampilan agar lebih bersih
-        fig.update_traces(marker=dict(size=8, color='#00d4ff'))
-        st.plotly_chart(fig, use_container_width=True)
+        st.altair_chart(chart, use_container_width=True)
 
-        # Menampilkan Koefisien Korelasi
-        corr_value = df_scatter[x_var].corr(df_scatter[y_var])
-        
-        c1, c2 = st.columns(2)
-        c1.metric("Koefisien Korelasi (r)", round(corr_value, 3))
-        
-        with c2:
-            if corr_value > 0.7:
-                st.success("Korelasi Positif Kuat: Jika X naik, Y ikut naik.")
-            elif corr_value < -0.7:
-                st.success("Korelasi Negatif Kuat: Jika X naik, Y justru turun.")
-            elif abs(corr_value) < 0.3:
-                st.warning("Korelasi Lemah: Tidak ada hubungan linear yang nyata.")
-            else:
-                st.info("Korelasi Moderat: Ada hubungan, tapi cukup menyebar.")
+        # =========================
+        # KETERANGAN
+        # =========================
+        st.subheader("Keterangan")
+        st.markdown("""
+        - **Amplitudo**: menunjukkan tinggi gelombang pasut dari titik tengah (mean sea level).
+        - **Fase**: menunjukkan waktu terjadinya puncak gelombang (derajat fase).
+        """)
 
-    # PASUT
-    elif pilihan == "🌊 Analisis Pasut":
-        st.header("🌊 Analisis Pasang Surut")
+        # =========================
+        # TABEL HARMONIK
+        # =========================
+        st.subheader("Komponen Harmonik Utama")
 
-        if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
-            time = df_clean['time'].values
-            raw_data = df_clean['raw'].values
-            
-            with st.spinner('Menghitung Harmonik...'):
-                coef = utide.solve(time, raw_data, lat=-6.0, method='ols', trend=False)
-                predict = utide.reconstruct(time, coef)
+        df_harmonik = pd.DataFrame({
+            "Komponen": coef.name,
+            "Amplitudo (m)": np.round(coef.A / 100, 3),
+            "Fase (°)": np.round(coef.g, 2)
+        })
 
-            df_plot_pasut = pd.DataFrame({
-                "time": time,
-                "Observasi": raw_data / 100,
-                "Prediksi": predict.h / 100
-            })
+        # komponen penting (ditambahin sesuai request kamu)
+        komponen_penting = ["M2", "S2", "K1", "O1", "K2", "N2", "M1"]
+        df_harmonik = df_harmonik[df_harmonik["Komponen"].isin(komponen_penting)]
 
-            st.subheader("Grafik Observasi vs Prediksi")
-            chart = alt.Chart(df_plot_pasut.melt('time', ['Observasi', 'Prediksi'])).mark_line().encode(
-                x='time:T',
-                y=alt.Y('value:Q', title='Elevasi (m)', scale=alt.Scale(domain=[3.0, 4.0], clamp=True)),
-                color=alt.Color('variable:N', scale=alt.Scale(range=['#00d4ff', '#ff4b4b']))
-            ).properties(height=400).interactive()
+        st.dataframe(df_harmonik, use_container_width=True)
 
-            st.altair_chart(chart, use_container_width=True)
+        # =========================
+        # FORMZAHL
+        # =========================
+        st.subheader("Analisis Tipe Pasut (Formzahl)")
+
+        durasi_hari = (df_clean['time'].max() - df_clean['time'].min()).days
+
+        if durasi_hari >= 29:
+            try:
+                A = dict(zip(coef.name, coef.A))
+                F = (A.get('K1', 0) + A.get('O1', 0)) / (A.get('M2', 1e-6) + A.get('S2', 1e-6))
+
+                st.metric("Nilai Formzahl (F)", round(F, 3))
+
+                if F < 0.25:
+                    tipe = "Semi-diurnal"
+                elif F < 1.5:
+                    tipe = "Mixed condong semi-diurnal"
+                elif F < 3:
+                    tipe = "Mixed condong diurnal"
+                else:
+                    tipe = "Diurnal"
+
+                st.success(f"Tipe Pasut: {tipe}")
+
+            except:
+                st.warning("Perhitungan Formzahl gagal")
 
         else:
-            st.error("Pilih variabel elevasi/water level")
+            st.warning("⚠️ Formzahl tidak dapat dihitung karena panjang data terlalu pendek (< 29 hari)")
 
+    else:
+        st.error("Pilih variabel elevasi/water level")
 else:
     st.info("👋 Silahkan upload data dulu")
