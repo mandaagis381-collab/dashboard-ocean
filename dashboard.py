@@ -200,7 +200,7 @@ if uploaded_file is not None:
         else:
             st.error("Pilih variabel elevasi/water level")
     
-    # WINDROSE
+        # WINDROSE
     elif pilihan == "🍃 Windrose":
         st.header(f"🍃 Windrose ({target})")
 
@@ -216,16 +216,17 @@ if uploaded_file is not None:
                     angularaxis=dict(
                         rotation=90,
                         direction='clockwise',
-                        tickvals=[0, 90, 180, 270],
-                        ticktext=['N', 'E', 'S', 'W']
+                        tickvals=[0,90,180,270],
+                        ticktext=['N','E','S','W']
                     )
                 )
             )
 
             st.plotly_chart(fig, use_container_width=True)
-
         else:
             st.error("Pilih variabel wind")
 
+else:
+    st.info("👋 Silahkan upload data dulu")
 else:
     st.info("👋 Silahkan upload data dulu")
