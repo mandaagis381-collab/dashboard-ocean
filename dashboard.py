@@ -6,7 +6,7 @@ import plotly.express as px
 from scipy.signal import butter, filtfilt
 import utide
 
-# --- 1. CONFIG & UI STYLE ---
+# CONFIG & UI STYLE 
 st.set_page_config(page_title="OceanData Pro Analytics", layout="wide")
 
 st.markdown("""
@@ -27,7 +27,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. SIDEBAR ---
+# SIDEBAR 
 with st.sidebar:
     st.markdown("<h2 style='color:#00d4ff; margin-bottom:0;'>🌊 OceanData</h2>", unsafe_allow_html=True)
     st.caption("Platform Analisis Data Kelautan")
@@ -39,7 +39,7 @@ with st.sidebar:
     
     uploaded_file = st.file_uploader("Upload File CSV/Excel", type=["csv", "xlsx"])
 
-# --- 3. LOGIKA DATA ---
+# LOGIKA DATA 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file, sep=None, engine='python')
 
@@ -54,16 +54,12 @@ if uploaded_file is not None:
     df_clean = df_clean.dropna()
     df_clean.columns = ['time', 'raw']
 
-    # =====================
     # DASHBOARD
-    # =====================
     if pilihan == "🏠 Dashboard":
         st.header(f"🏠 Dashboard: {target}")
         st.dataframe(df_clean.head(100), use_container_width=True)
 
-    # =====================
     # STATISTIKA
-    # =====================
     elif pilihan == "📊 Statistika Data":
         st.header(f"📊 Statistika Data: {target}")
         data = df_clean['raw']
@@ -77,9 +73,7 @@ if uploaded_file is not None:
         col4.metric("Standard Deviasi", round(data.std(), 3))
         col5.metric("Jumlah Data", int(data.count()))
 
-    # =====================
     # CLEANING
-    # =====================
     elif pilihan == "📂 Data Cleaning":
         st.header("📂 Preprocessing: Despiking")
         thresh = st.slider("Threshold (Std Dev):", 1.0, 5.0, 3.0)
@@ -87,22 +81,40 @@ if uploaded_file is not None:
         df_cleaned = df_clean[((df_clean['raw'] - mean).abs() / std) <= thresh].copy()
         st.line_chart(df_cleaned.set_index('time')['raw'])
 
-    # =====================
     # VISUALISASI
-    # =====================
-    elif pilihan == "📈 Visualisasi":
-        st.header("📈 Analisis Deret Waktu")
-        st.altair_chart(
-            alt.Chart(df_clean).mark_line(color='#00d4ff').encode(
-                x='time:T',
-                y=alt.Y('raw:Q', scale=alt.Scale(zero=False))
-            ).properties(height=450).interactive(),
-            use_container_width=True
-        )
+   elif pilihan == "📈 Visualisasi":
+        st.header("📈 Analisis Deret Waktu (Time Series)")
+        st.sidebar.markdown("### Setting Filter")
+        pilihan_jam = st.sidebar.selectbox("Pilih Jendela Waktu:", ["1 Jam", "3 Jam", "12 Jam", "24 Jam", "25 Jam (Eliminasi Pasut)", "Custom"])
+        
+        if pilihan_jam == "1 Jam": window_size = 60
+        elif pilihan_jam == "3 Jam": window_size = 180
+        elif pilihan_jam == "12 Jam": window_size = 720
+        elif pilihan_jam == "24 Jam": window_size = 1440
+        elif pilihan_jam == "25 Jam (Eliminasi Pasut)": window_size = 1500
+        else: window_size = st.sidebar.number_input("Masukkan Jumlah Poin:", 5, 5000, 60)
 
-    # =====================
+        t_raw, t_avg, t_ma, t_lp = st.tabs(["📄 Data Raw", "📊 Averaging", "📈 Moving Average", "📉 Low Pass"])
+        
+        with t_raw:
+            st.altair_chart(alt.Chart(df_clean).mark_line(color='#00d4ff').encode(x='time:T', y=alt.Y('raw:Q', scale=alt.Scale(zero=False))).properties(height=450).interactive(), use_container_width=True)
+        
+        with t_avg:
+            df_avg = df_clean.copy(); df_avg['filtered'] = df_avg['raw'].rolling(window=window_size).mean()
+            st.altair_chart(alt.Chart(df_avg.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
+
+        with t_ma:
+            df_ma = df_clean.copy(); df_ma['filtered'] = df_ma['raw'].rolling(window=window_size, center=True).mean()
+            st.altair_chart(alt.Chart(df_ma.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
+
+        with t_lp:
+            try:
+                b, a = butter(4, 1/window_size, btype='low')
+                df_lp = df_clean.copy(); df_lp['filtered'] = filtfilt(b, a, df_lp['raw'])
+                st.altair_chart(alt.Chart(df_lp.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
+            except: st.error("Window terlalu kecil.")
+
     # SCATTER
-    # =====================
     elif pilihan == "🔍 Analisis Scatter":
         st.header("🔍 Analisis Scatter")
 
@@ -116,8 +128,6 @@ if uploaded_file is not None:
         st.plotly_chart(fig, use_container_width=True)
 
         st.metric("Korelasi", round(df_scatter[x_var].corr(df_scatter[y_var]),3))
-
-    # PASUT (FINAL)
     
        # PASUT (FINAL)
     elif pilihan == "🌊 Analisis Pasut":
@@ -139,7 +149,7 @@ if uploaded_file is not None:
                 )
                 predict = utide.reconstruct(time, coef)
 
-            # --- PREPARASI GRAFIK (KONVERSI KE METER) ---
+            # PREPARASI GRAFIK (KONVERSI KE METER) 
             # Kita buat dataframe khusus untuk plot saja agar satuannya Meter
             df_plot_pasut = pd.DataFrame({
                 "time": time,
@@ -147,7 +157,7 @@ if uploaded_file is not None:
                 "Prediksi": predict.h / 100        # Konversi cm ke m untuk grafik
             })
 
-            # --- GRAFIK ---
+            # GRAFIK
             st.subheader("Grafik Observasi vs Prediksi")
             chart = alt.Chart(df_plot_pasut.melt('time', ['Observasi', 'Prediksi'])).mark_line().encode(
                 x='time:T',
@@ -171,7 +181,7 @@ if uploaded_file is not None:
 
             st.dataframe(df_harmonik, use_container_width=True)
 
-            # --- FORMZAHL (TIDAK DIUBAH LOGIKANYA) ---
+            # FORMZAHL 
             st.subheader("Analisis Tipe Pasut (Formzahl)")
             durasi_hari = (df_clean['time'].max() - df_clean['time'].min()).days
 
@@ -198,9 +208,7 @@ if uploaded_file is not None:
       
             durasi_hari = (df_clean['time'].max() - df_clean['time'].min()).days
 
-    # =====================
     # WINDROSE
-    # =====================
     elif pilihan == "🍃 Windrose":
         st.header(f"🍃 Windrose ({target})")
 
