@@ -200,7 +200,7 @@ if uploaded_file is not None:
         else:
             st.error("Pilih variabel elevasi/water level")
     
-     elif pilihan == "🍃 Windrose":
+      elif pilihan == "🍃 Windrose":
         st.header(f"🍃 Modul: Windrose ({target})")
         
         # Logika Universal untuk semua variabel Wind yang ada di gambar Dea
