@@ -147,18 +147,50 @@ if uploaded_file is not None:
 
     # SCATTER
     elif pilihan == "🔍 Analisis Scatter":
-        st.header("🔍 Analisis Scatter")
+        st.header("🔍 Analisis Scatter (Korelasi)")
 
         cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        x_var = st.selectbox("X", cols)
-        y_var = st.selectbox("Y", cols, index=1 if len(cols) > 1 else 0)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            x_var = st.selectbox("Pilih Variabel X", cols)
+        with col2:
+            y_var = st.selectbox("Pilih Variabel Y", cols, index=1 if len(cols) > 1 else 0)
 
+        # Ambil data dan hapus baris yang kosong (NaN)
         df_scatter = df[[x_var, y_var]].dropna()
 
-        fig = px.scatter(df_scatter, x=x_var, y=y_var, template="plotly_dark")
+        # Membuat Scatter Plot menggunakan Plotly Express
+        fig = px.scatter(
+            df_scatter, 
+            x=x_var, 
+            y=y_var, 
+            template="plotly_dark",
+            opacity=0.5,           # Membuat titik agak transparan agar tumpukan data terlihat
+            trendline="ols",       # Menambahkan garis tren regresi linear
+            trendline_color_override="#ff4b4b", # Warna garis tren (merah)
+            title=f"Hubungan antara {x_var} dan {y_var}"
+        )
+
+        # Menyesuaikan tampilan agar lebih bersih
+        fig.update_traces(marker=dict(size=8, color='#00d4ff'))
         st.plotly_chart(fig, use_container_width=True)
 
-        st.metric("Korelasi", round(df_scatter[x_var].corr(df_scatter[y_var]), 3))
+        # Menampilkan Koefisien Korelasi
+        corr_value = df_scatter[x_var].corr(df_scatter[y_var])
+        
+        c1, c2 = st.columns(2)
+        c1.metric("Koefisien Korelasi (r)", round(corr_value, 3))
+        
+        with c2:
+            if corr_value > 0.7:
+                st.success("Korelasi Positif Kuat: Jika X naik, Y ikut naik.")
+            elif corr_value < -0.7:
+                st.success("Korelasi Negatif Kuat: Jika X naik, Y justru turun.")
+            elif abs(corr_value) < 0.3:
+                st.warning("Korelasi Lemah: Tidak ada hubungan linear yang nyata.")
+            else:
+                st.info("Korelasi Moderat: Ada hubungan, tapi cukup menyebar.")
 
     # PASUT
     elif pilihan == "🌊 Analisis Pasut":
