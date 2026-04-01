@@ -228,5 +228,4 @@ if uploaded_file is not None:
 
 else:
     st.info("👋 Silahkan upload data dulu")
-else:
-    st.info("👋 Silahkan upload data dulu")
+
