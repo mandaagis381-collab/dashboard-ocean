@@ -32,7 +32,7 @@ with st.sidebar:
     st.markdown("<h2 style='color:#00d4ff; margin-bottom:0;'>🌊 OceanData</h2>", unsafe_allow_html=True)
     st.caption("Platform Analisis Data Kelautan")
     
-    all_options = ["🏠 Dashboard", "📊 Statistika Data", "📂 Data Cleaning", "📈 Visualisasi", "🔍, "🌊 Analisis Pasut", "🍃 Windrose"]
+    all_options = ["🏠 Dashboard", "📊 Statistika Data", "📂 Data Cleaning", "📈 Visualisasi", "🌊 Analisis Pasut", "🍃 Windrose"]
     
     st.markdown("<div class='menu-header'>MAIN MENU</div>", unsafe_allow_html=True)
     pilihan = st.radio("Navigasi", all_options, label_visibility="collapsed")
