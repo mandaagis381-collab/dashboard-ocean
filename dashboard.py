@@ -82,37 +82,68 @@ if uploaded_file is not None:
         st.line_chart(df_cleaned.set_index('time')['raw'])
 
     # VISUALISASI
-       elif pilihan == "📈 Visualisasi":
+    elif pilihan == "📈 Visualisasi":
         st.header("📈 Analisis Deret Waktu (Time Series)")
         st.sidebar.markdown("### Setting Filter")
         pilihan_jam = st.sidebar.selectbox("Pilih Jendela Waktu:", ["1 Jam", "3 Jam", "12 Jam", "24 Jam", "25 Jam (Eliminasi Pasut)", "Custom"])
         
-        if pilihan_jam == "1 Jam": window_size = 60
-        elif pilihan_jam == "3 Jam": window_size = 180
-        elif pilihan_jam == "12 Jam": window_size = 720
-        elif pilihan_jam == "24 Jam": window_size = 1440
-        elif pilihan_jam == "25 Jam (Eliminasi Pasut)": window_size = 1500
-        else: window_size = st.sidebar.number_input("Masukkan Jumlah Poin:", 5, 5000, 60)
+        if pilihan_jam == "1 Jam":
+            window_size = 60
+        elif pilihan_jam == "3 Jam":
+            window_size = 180
+        elif pilihan_jam == "12 Jam":
+            window_size = 720
+        elif pilihan_jam == "24 Jam":
+            window_size = 1440
+        elif pilihan_jam == "25 Jam (Eliminasi Pasut)":
+            window_size = 1500
+        else:
+            window_size = st.sidebar.number_input("Masukkan Jumlah Poin:", 5, 5000, 60)
 
         t_raw, t_avg, t_ma, t_lp = st.tabs(["📄 Data Raw", "📊 Averaging", "📈 Moving Average", "📉 Low Pass"])
         
         with t_raw:
-            st.altair_chart(alt.Chart(df_clean).mark_line(color='#00d4ff').encode(x='time:T', y=alt.Y('raw:Q', scale=alt.Scale(zero=False))).properties(height=450).interactive(), use_container_width=True)
+            st.altair_chart(
+                alt.Chart(df_clean).mark_line(color='#00d4ff').encode(
+                    x='time:T',
+                    y=alt.Y('raw:Q', scale=alt.Scale(zero=False))
+                ).properties(height=450).interactive(),
+                use_container_width=True
+            )
         
         with t_avg:
-            df_avg = df_clean.copy(); df_avg['filtered'] = df_avg['raw'].rolling(window=window_size).mean()
-            st.altair_chart(alt.Chart(df_avg.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
+            df_avg = df_clean.copy()
+            df_avg['filtered'] = df_avg['raw'].rolling(window=window_size).mean()
+            st.altair_chart(
+                alt.Chart(df_avg.melt('time', ['raw', 'filtered'])).mark_line().encode(
+                    x='time:T', y='value:Q', color='variable:N'
+                ).properties(height=450).interactive(),
+                use_container_width=True
+            )
 
         with t_ma:
-            df_ma = df_clean.copy(); df_ma['filtered'] = df_ma['raw'].rolling(window=window_size, center=True).mean()
-            st.altair_chart(alt.Chart(df_ma.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
+            df_ma = df_clean.copy()
+            df_ma['filtered'] = df_ma['raw'].rolling(window=window_size, center=True).mean()
+            st.altair_chart(
+                alt.Chart(df_ma.melt('time', ['raw', 'filtered'])).mark_line().encode(
+                    x='time:T', y='value:Q', color='variable:N'
+                ).properties(height=450).interactive(),
+                use_container_width=True
+            )
 
         with t_lp:
             try:
                 b, a = butter(4, 1/window_size, btype='low')
-                df_lp = df_clean.copy(); df_lp['filtered'] = filtfilt(b, a, df_lp['raw'])
-                st.altair_chart(alt.Chart(df_lp.melt('time', ['raw', 'filtered'])).mark_line().encode(x='time:T', y='value:Q', color='variable:N').properties(height=450).interactive(), use_container_width=True)
-            except: st.error("Window terlalu kecil.")
+                df_lp = df_clean.copy()
+                df_lp['filtered'] = filtfilt(b, a, df_lp['raw'])
+                st.altair_chart(
+                    alt.Chart(df_lp.melt('time', ['raw', 'filtered'])).mark_line().encode(
+                        x='time:T', y='value:Q', color='variable:N'
+                    ).properties(height=450).interactive(),
+                    use_container_width=True
+                )
+            except:
+                st.error("Window terlalu kecil.")
 
     # SCATTER
     elif pilihan == "🔍 Analisis Scatter":
@@ -120,119 +151,44 @@ if uploaded_file is not None:
 
         cols = df.select_dtypes(include=[np.number]).columns.tolist()
         x_var = st.selectbox("X", cols)
-        y_var = st.selectbox("Y", cols, index=1 if len(cols)>1 else 0)
+        y_var = st.selectbox("Y", cols, index=1 if len(cols) > 1 else 0)
 
         df_scatter = df[[x_var, y_var]].dropna()
 
         fig = px.scatter(df_scatter, x=x_var, y=y_var, template="plotly_dark")
         st.plotly_chart(fig, use_container_width=True)
 
-        st.metric("Korelasi", round(df_scatter[x_var].corr(df_scatter[y_var]),3))
-    
-       # PASUT (FINAL)
+        st.metric("Korelasi", round(df_scatter[x_var].corr(df_scatter[y_var]), 3))
+
+    # PASUT
     elif pilihan == "🌊 Analisis Pasut":
         st.header("🌊 Analisis Pasang Surut")
 
         if any(x in target.lower() for x in ['level', 'height', 'elevasi']):
-            
-            # --- LOGIKA DATA ---
             time = df_clean['time'].values
-            raw_data = df_clean['raw'].values # Data asli (cm) tetap untuk hitung UTide agar presisi
+            raw_data = df_clean['raw'].values
             
             with st.spinner('Menghitung Harmonik...'):
-                coef = utide.solve(
-                    time,
-                    raw_data,
-                    lat=-6.0,
-                    method='ols',
-                    trend=False
-                )
+                coef = utide.solve(time, raw_data, lat=-6.0, method='ols', trend=False)
                 predict = utide.reconstruct(time, coef)
 
-            # PREPARASI GRAFIK (KONVERSI KE METER) 
-            # Kita buat dataframe khusus untuk plot saja agar satuannya Meter
             df_plot_pasut = pd.DataFrame({
                 "time": time,
-                "Observasi": raw_data / 100,      # Konversi cm ke m untuk grafik
-                "Prediksi": predict.h / 100        # Konversi cm ke m untuk grafik
+                "Observasi": raw_data / 100,
+                "Prediksi": predict.h / 100
             })
 
-            # GRAFIK
             st.subheader("Grafik Observasi vs Prediksi")
             chart = alt.Chart(df_plot_pasut.melt('time', ['Observasi', 'Prediksi'])).mark_line().encode(
                 x='time:T',
-                # Mengubah nama sumbu Y menjadi Elevasi (m) dan rentang zoom 3.0 - 4.0 meter
                 y=alt.Y('value:Q', title='Elevasi (m)', scale=alt.Scale(domain=[3.0, 4.0], clamp=True)),
                 color=alt.Color('variable:N', scale=alt.Scale(range=['#00d4ff', '#ff4b4b']))
             ).properties(height=400).interactive()
 
             st.altair_chart(chart, use_container_width=True)
 
-            # --- TABEL & KONSTANTA (TIDAK DIUBAH) ---
-            st.subheader("Komponen Harmonik Utama")
-            df_harmonik = pd.DataFrame({
-                "Komponen": coef.name,
-                "Amplitudo (m)": np.round(coef.A / 100, 3), # Amplitudo dikonversi ke meter untuk tabel
-                "Fase (°)": np.round(coef.g, 2)
-            })
-
-            komponen_penting = ["M2", "S2", "K1", "O1", "K2", "N2"]
-            df_harmonik = df_harmonik[df_harmonik["Komponen"].isin(komponen_penting)]
-
-            st.dataframe(df_harmonik, use_container_width=True)
-
-            # FORMZAHL 
-            st.subheader("Analisis Tipe Pasut (Formzahl)")
-            durasi_hari = (df_clean['time'].max() - df_clean['time'].min()).days
-
-            if durasi_hari >= 29:
-                try:
-                    A = dict(zip(coef.name, coef.A))
-                    F = (A.get('K1',0) + A.get('O1',0)) / (A.get('M2',1e-6) + A.get('S2',1e-6))
-
-                    st.metric("Nilai Formzahl (F)", round(F, 3))
-
-                    if F < 0.25: tipe = "Semi-diurnal"
-                    elif F < 1.5: tipe = "Mixed condong semi-diurnal"
-                    elif F < 3: tipe = "Mixed condong diurnal"
-                    else: tipe = "Diurnal"
-
-                    st.success(f"Tipe Pasut: {tipe}")
-                except:
-                    st.warning("Perhitungan gagal")
-            else:
-                st.info("⚠️ Formzahl tidak dapat dihitung karena panjang data terlalu pendek.")
-
         else:
             st.error("Pilih variabel elevasi/water level")
-      
-            durasi_hari = (df_clean['time'].max() - df_clean['time'].min()).days
-
-    # WINDROSE
-    elif pilihan == "🍃 Windrose":
-        st.header(f"🍃 Windrose ({target})")
-
-        if "wind" in target.lower():
-            df_rose = df[[target]].dropna()
-            df_rose['dir_bin'] = (np.round(df_rose[target] / 22.5) * 22.5) % 360
-            counts = df_rose.groupby(['dir_bin']).size().reset_index(name='count')
-
-            fig = px.bar_polar(counts, r="count", theta="dir_bin", template="plotly_dark")
-
-            fig.update_layout(
-                polar=dict(
-                    angularaxis=dict(
-                        rotation=90,
-                        direction='clockwise',
-                        tickvals=[0,90,180,270],
-                        ticktext=['N','E','S','W']
-                    )
-                )
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.error("Pilih variabel wind")
 
 else:
     st.info("👋 Silahkan upload data dulu")
